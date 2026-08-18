@@ -1,42 +1,125 @@
 # apps/api
 
-Бэкенд на NestJS 11 (TypeScript). Пока в стартовом шаблонном состоянии — только `AppModule` / `AppController` / `AppService`, реальная доменная логика ещё не добавлена.
+Бэкенд на NestJS 11 (TypeScript). Реализован модуль пользователей (`UsersModule`) — создание и поиск пользователя, модуль авторизации (`AuthModule`) — регистрация и логин по email/паролю поверх `UsersModule`, выдача JWT, и модуль встреч (`MeetingModule`) поверх `AuthModule`, защищённый JWT-гвардом. Персистентность — PostgreSQL через Prisma ORM 7. Бизнес-логика организована по паттерну CQRS (`@nestjs/cqrs`): мутации — Command, чтения — Query. Взаимодействие между `AuthModule` и `UsersModule` идёт исключительно через `CommandBus`/`QueryBus` — `AuthModule` не обращается к `PrismaService` напрямую и не импортирует хендлеры/провайдеры `UsersModule`.
 
 ## Команды (запускать из этой директории или через `--workspace=api` из корня)
 
 ```
-npm run start:dev     # dev-сервер с watch
-npm run start:debug    # dev-сервер с inspector
-npm run build           # сборка в dist/
-npm run start:prod      # запуск собранного билда (node dist/main)
-npm run lint             # eslint --fix
-npm run format            # prettier --write
-npm run test              # unit-тесты (jest)
+npm run start:dev          # dev-сервер с watch
+npm run start:debug         # dev-сервер с inspector
+npm run build                 # сборка в dist/
+npm run start:prod             # запуск собранного билда (node dist/main)
+npm run lint                    # eslint --fix
+npm run format                   # prettier --write
+npm run test                      # unit-тесты (jest) — подробности в разделе «Тесты»
 npm run test:watch
 npm run test:cov
-npm run test:e2e          # e2e-тесты (jest, конфиг test/jest-e2e.json)
+npm run test:e2e                   # e2e-тесты (jest) — требуют поднятой БД, подробности в разделе «Тесты»
+npm run prisma:generate             # сгенерировать Prisma Client
+npm run prisma:migrate:dev           # применить/создать миграцию локально
 ```
 
-По умолчанию сервер слушает порт из `process.env.PORT`, иначе `3000`.
+Сервер слушает порт из `process.env.PORT` (задан в `apps/api/.env` как `3001`, чтобы не конфликтовать с dev-сервером `apps/web` на 3000), иначе по умолчанию `3000`.
+
+CORS включён (`app.enableCors()` в `main.ts`) для origin'а из `process.env.WEB_ORIGIN` (по умолчанию `http://localhost:3000`, задаётся в `apps/api/.env`/`.env.example`) — чтобы `apps/web` мог напрямую вызывать API из браузера.
+
+## База данных
+
+PostgreSQL поднимается через корневой `docker-compose.yml` (сервис `postgres`, хост-порт **5433**, чтобы не конфликтовать с локально установленным PostgreSQL на порту 5432). Строка подключения задаётся в `apps/api/.env` (`DATABASE_URL`), пример — в `.env.example`. `.env` в git не коммитится.
+
+Prisma 7 требует driver adapter для SQL-провайдеров: используется `@prisma/adapter-pg` поверх `pg`. Generator сконфигурирован с `moduleFormat = "cjs"` (проект целиком на CommonJS), клиент генерируется в `apps/api/generated/prisma` (не коммитится, генерируется командой `prisma:generate`).
+
+## Тесты
+
+- `npm run test` — unit-тесты (Jest, конфиг в `package.json`, `rootDir: src`, паттерн `*.spec.ts`). На данный момент в проекте нет ни одного unit-спека — команда настроена с флагом `--passWithNoTests` и завершается успешно (код 0), а не падает с "No tests found".
+- `npm run test:watch` — unit-тесты в watch-режиме.
+- `npm run test:cov` — unit-тесты с отчётом покрытия (тоже с `--passWithNoTests`).
+- `npm run test:e2e` — e2e-тесты (Jest, конфиг `test/jest-e2e.json`, флаг `--runInBand`). **Требуют поднятой PostgreSQL**: перед запуском выполнить `docker compose up -d` из корня репозитория и убедиться, что `apps/api/.env` содержит рабочий `DATABASE_URL` (см. `.env.example`). Тесты используют реальную БД (не мок и не отдельную тестовую БД) и чистят задействованные таблицы в `beforeEach`; `--runInBand` обязателен, так как спеки работают с общими таблицами и гонка при параллельном запуске между файлами ломает тесты.
+- `npm run test:debug` — unit-тесты с Node-инспектором (`--inspect-brk`), для пошаговой отладки в IDE.
+- Оба Jest-конфига (`test` и `test:e2e`) запускаются с `NODE_OPTIONS=--experimental-vm-modules` (через `cross-env`) — сгенерированный Prisma Client 7 динамически импортирует WASM query compiler, что без этого флага не работает под Jest — и содержат `moduleNameMapper` для `.js`-импортов из сгенерированного Prisma Client (nodenext-стиль относительных импортов).
+- При добавлении нового модуля/хендлера с бизнес-логикой — покрывать его e2e-тестом по образцу `test/auth.e2e-spec.ts` / `test/meeting.e2e-spec.ts` (там же — референс по очистке таблиц и структуре `describe`/`it`).
 
 ## Структура
 
 ```
+prisma/
+  schema.prisma          — схема БД (модели User, Meeting) и generator/datasource
+  migrations/              — SQL-миграции
 src/
-  main.ts              — точка входа, bootstrap Nest-приложения
-  app.module.ts         — корневой модуль
-  app.controller.ts      — контроллер (+ app.controller.spec.ts — unit-тест)
-  app.service.ts          — сервис
+  main.ts                    — точка входа, bootstrap Nest-приложения
+  app.module.ts                — корневой модуль (ConfigModule, PrismaModule, AuthModule, MeetingModule, глобальный ValidationPipe); собственных контроллеров/провайдеров не имеет
+  prisma/
+    prisma.service.ts             — PrismaClient как Nest-провайдер (connect/disconnect по хукам жизненного цикла)
+    prisma.module.ts                — глобальный модуль, экспортирует PrismaService
+  users/
+    users.module.ts                   — регистрирует CqrsModule; providers = хендлеры команд/запросов (ничего не экспортирует — с модулем взаимодействуют только через CommandBus/QueryBus)
+    user.types.ts                       — интерфейс `UserRecord` (id, email, password) — тип результата хендлеров, используется и в `AuthModule`
+    commands/impl/create-user.command.ts, commands/handlers/create-user.handler.ts — создание пользователя: проверяет уникальность email (409 `ConflictException` при дубликате), хеширует пароль (bcrypt) и сохраняет через `PrismaService`
+    queries/impl/find-user-by-email.query.ts, queries/handlers/find-user-by-email.handler.ts — поиск пользователя по email через `PrismaService`, возвращает `UserRecord | null` (включая хеш пароля — нужен `AuthModule` для проверки при логине)
+  auth/
+    auth.module.ts                   — регистрирует CqrsModule, JwtModule (секрет/TTL из ConfigService) и импортирует UsersModule (для общего CommandBus/QueryBus в графе Nest); экспортирует JwtModule и JwtAuthGuard для использования другими модулями
+    auth.controller.ts                — POST /auth/register (CommandBus), POST /auth/login (QueryBus)
+    auth-token.service.ts               — общая выдача JWT (payload sub/email), используется обоими хендлерами
+    jwt-auth.guard.ts                    — гвард `JwtAuthGuard`: проверяет Bearer-токен, кладёт payload в `request.user` (401 при отсутствии/невалидности токена)
+    current-user.decorator.ts             — параметр-декоратор `@CurrentUser()`, достаёт `request.user`
+    express.d.ts                           — расширение типа `express.Request` полем `user`
+    commands/impl/register.command.ts, commands/handlers/register.handler.ts — регистрация: отправляет `CreateUserCommand` в `UsersModule` через `CommandBus`, затем выдаёт JWT
+    queries/impl/login.query.ts, queries/handlers/login.handler.ts           — логин: отправляет `FindUserByEmailQuery` в `UsersModule` через `QueryBus`, проверяет пароль (bcrypt.compare, 401 при отсутствии пользователя или неверном пароле), затем выдаёт JWT
+    dto/register.dto.ts, dto/login.dto.ts — class-validator DTO
+  meeting/
+    meeting.module.ts                 — импортирует CqrsModule и AuthModule (для JwtAuthGuard)
+    meeting.controller.ts               — POST /meetings, GET /meetings, GET /meetings/:id — все под `@UseGuards(JwtAuthGuard)`
+    commands/impl/create-meeting.command.ts, commands/handlers/create-meeting.handler.ts — создание встречи для текущего пользователя (organizerId = sub из токена)
+    queries/impl/get-meetings.query.ts, queries/handlers/get-meetings.handler.ts — список встреч текущего пользователя
+    queries/impl/get-meeting-by-id.query.ts, queries/handlers/get-meeting-by-id.handler.ts — встреча по id, ищется вместе с organizerId (404, если не найдена или принадлежит другому пользователю)
+    dto/create-meeting.dto.ts — class-validator DTO (title, date как ISO8601-строка, participants — массив строк)
 test/
-  app.e2e-spec.ts         — e2e-тест
-  jest-e2e.json            — конфиг Jest для e2e
+  auth.e2e-spec.ts             — e2e-тесты /auth/register и /auth/login (используют реальную БД, очищают таблицу User в beforeEach)
+  meeting.e2e-spec.ts          — e2e-тесты /meetings (используют реальную БД, очищают таблицы Meeting и User в beforeEach; проверяют изоляцию встреч между пользователями)
+  jest-e2e.json                 — конфиг Jest для e2e
 ```
+
+## CQRS
+
+Бизнес-логика организована по паттерну CQRS через `@nestjs/cqrs`. Разделение: **мутации** (создание/изменение данных) — Command, **чтения** — Query. Оба модуля с бизнес-логикой (`AuthModule`, `MeetingModule`) импортируют `CqrsModule` и следуют одной структуре.
+
+Поток запроса: `Controller` → (`CommandBus.execute()` / `QueryBus.execute()`) → соответствующий `*Handler` → `PrismaService`. Контроллер не содержит бизнес-логики — только валидацию входа (DTO) и делегирование в шину.
+
+Структура на модуль:
+
+```
+<module>/
+  commands/
+    impl/<action>.command.ts        — класс Command, поля readonly в конструкторе (данные запроса)
+    handlers/<action>.handler.ts    — @CommandHandler(<Action>Command), implements ICommandHandler<Command, Result>
+  queries/
+    impl/<action>.query.ts          — класс Query, поля readonly в конструкторе
+    handlers/<action>.handler.ts    — @QueryHandler(<Action>Query), implements IQueryHandler<Query, Result>
+  <module>.module.ts                 — импортирует CqrsModule; providers = [...CommandHandlers, ...QueryHandlers] (массивы объявлены в начале файла модуля)
+  <module>.controller.ts             — инжектит CommandBus и QueryBus, по одному методу на роут
+```
+
+Примеры из кода:
+- `CreateUserCommand`/`CreateUserHandler` (`users/commands/`) — команда создаёт пользователя, кидает `ConflictException` при дубликате email.
+- `FindUserByEmailQuery`/`FindUserByEmailHandler` (`users/queries/`) — запрос только читает пользователя по email, не создаёт побочных эффектов.
+- `RegisterCommand`/`RegisterHandler` (`auth/commands/`) — отправляет `CreateUserCommand` в `UsersModule` через `CommandBus`, затем выдаёт JWT.
+- `LoginQuery`/`LoginHandler` (`auth/queries/`) — отправляет `FindUserByEmailQuery` в `UsersModule` через `QueryBus`, проверяет пароль и не создаёт пользователя при неудаче (401).
+- `CreateMeetingCommand`/`CreateMeetingHandler`, `GetMeetingsQuery`/`GetMeetingByIdQuery` (`meeting/`) — `organizerId` командам и запросам передаётся из `@CurrentUser()` (JWT `sub`), а не из тела запроса, чтобы нельзя было создать/прочитать встречу от чужого имени.
+
+Соглашения по CQRS:
+- Один хендлер обрабатывает ровно один Command/Query (`@CommandHandler`/`@QueryHandler` принимает один класс).
+- Хендлеры и Command/Query-классы не импортируются друг в друга напрямую за пределами своей пары — контроллер не обращается к хендлерам, только к шинам.
+- HTTP-исключения (`NotFoundException`, `ConflictException`, `UnauthorizedException` и т.д.) кидаются из хендлера — Nest сам транслирует их в HTTP-ответ.
+- При добавлении нового модуля с бизнес-логикой — придерживаться этой же структуры (`commands/impl`, `commands/handlers`, `queries/impl`, `queries/handlers`) вместо сервисов с прямой логикой в контроллере.
+- **Межмодульное взаимодействие** (например, `AuthModule` → `UsersModule`) идёт только через `CommandBus`/`QueryBus`, а не через прямой импорт сервисов/хендлеров одного модуля в другой: `CqrsModule` (без `forRoot`) де-дуплицируется Nest'ом как один и тот же узел графа при импорте в нескольких модулях, поэтому `CommandBus`/`QueryBus`/`EventBus` — синглтоны на всё приложение, и хендлеры, зарегистрированные в одном модуле, доступны через шину из любого другого модуля вне зависимости от того, импортирует ли он модуль-владелец хендлеров напрямую. Модуль всё равно стоит импортировать явно (как `AuthModule` импортирует `UsersModule`) — это фиксирует зависимость в графе Nest и явно показывает связь между модулями, даже если технически не обязательно для работы шины.
 
 ## Соглашения
 
-- Jest для unit-тестов настроен прямо в `package.json` (`rootDir: src`, паттерн `*.spec.ts`), для e2e — отдельный `test/jest-e2e.json`.
 - Prettier конфиг — `.prettierrc`; ESLint — `eslint.config.mjs` (flat config, интегрирован с prettier через `eslint-config-prettier` / `eslint-plugin-prettier`).
 - Новые модули/контроллеры/сервисы добавлять через Nest CLI (`nest g module|controller|service <name>`) для соблюдения структуры и автогенерации spec-файлов.
+- Логин ищет пользователя и не создаёт его при отсутствии (401 Unauthorized); регистрация создаёт пользователя и возвращает 409 Conflict при дубликате email.
+- Роуты `/meetings/*` требуют заголовок `Authorization: Bearer <accessToken>` (проверяется `JwtAuthGuard` из `AuthModule`); `Meeting.organizerId` имеет `onDelete: Cascade` на связи с `User`, чтобы удаление пользователя не оставляло висящих встреч и не ломало очистку таблиц в e2e-тестах.
+- После изменения `prisma/schema.prisma` — прогонять `npm run prisma:migrate:dev` (создаёт и применяет миграцию) и `npm run prisma:generate`.
 
 ## Поддержка документации в актуальном состоянии
 

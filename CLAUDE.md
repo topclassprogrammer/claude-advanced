@@ -5,7 +5,15 @@
 - `apps/web` — фронтенд на Next.js (React 19). См. `apps/web/CLAUDE.md`.
 - `apps/api` — бэкенд на NestJS. См. `apps/api/CLAUDE.md`.
 
-Оба приложения пока находятся в стартовом шаблонном состоянии (созданы через `create-next-app` и Nest CLI), логика приложения ещё не реализована.
+В `apps/api` реализован модуль авторизации (регистрация/логин, JWT) и модуль встреч (создание, список) поверх PostgreSQL — подробности в `apps/api/CLAUDE.md`. В `apps/web` реализованы страницы входа (`/auth/login`), регистрации (`/auth/register`) и главная страница (`/`) со списком встреч текущего пользователя — подробности в `apps/web/CLAUDE.md`.
+
+## Порты
+
+`apps/web` (Next.js dev-сервер) слушает **3000**, `apps/api` (NestJS) — **3001** (задаётся через `PORT` в `apps/api/.env`, см. `apps/api/.env.example`). Порты разведены, чтобы оба приложения можно было запускать одновременно.
+
+## База данных
+
+PostgreSQL для локальной разработки поднимается через корневой `docker-compose.yml` (`docker compose up -d`), хост-порт **5433** (не 5432 — во избежание конфликта с локально установленным PostgreSQL). Подключение из `apps/api` настраивается через `apps/api/.env` (см. `apps/api/.env.example`).
 
 ## Команды из корня
 
@@ -37,7 +45,7 @@ apps/
 
 - Каждый workspace устанавливает и линтует зависимости независимо (`npm install` из корня разрешит оба через workspaces).
 - Перед коммитом запускать `lint` и `format` для затронутого приложения.
-- Тесты API: `npm run test --workspace=api` (unit), `npm run test:e2e --workspace=api` (e2e).
+- Тесты API: `npm run test --workspace=api` (unit), `npm run test:e2e --workspace=api` (e2e). Для e2e нужна поднятая БД (`docker compose up -d`) — подробности в `apps/api/CLAUDE.md`, раздел «Тесты».
 
 ## Поддержка документации в актуальном состоянии
 
