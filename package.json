@@ -6,7 +6,8 @@
     "apps/*"
   ],
   "devDependencies": {
-    "@swc/helpers": "0.5.23"
+    "@swc/helpers": "0.5.23",
+    "husky": "^9.1.7"
   },
   "scripts": {
     "dev:web": "npm run dev --workspace=web",
@@ -19,6 +20,7 @@
     "lint:api": "npm run lint --workspace=api",
     "format": "npm run format --workspaces",
     "format:web": "npm run format --workspace=web",
-    "format:api": "npm run format --workspace=api"
+    "format:api": "npm run format --workspace=api",
+    "prepare": "husky"
   }
 }
