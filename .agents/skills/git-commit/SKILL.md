@@ -82,7 +82,11 @@ git add -p
 
 **Never commit secrets** (.env, credentials.json, private keys).
 
-### 3. Generate Commit Message
+### 3. Verify and Auto-Fix Broken Files
+
+Before generating the commit message, check that changed files in the affected workspace(s) actually compile/lint clean (e.g. `npx tsc --noEmit` for `apps/api`, `npm run lint --workspace=<name>` for either app). If a change is broken in an obvious, mechanical way — a removed import whose symbol is still referenced, a leftover unused variable, a stray syntax slip — fix it directly and continue, without pausing to ask. Do not silently "fix" anything that changes behavior or requires a judgment call (e.g. an incomplete feature, an ambiguous rename, a logic error); those still warrant surfacing to the user. Briefly note in the final summary what was auto-corrected and why.
+
+### 4. Generate Commit Message
 
 Analyze the diff to determine:
 
@@ -90,7 +94,7 @@ Analyze the diff to determine:
 - **Scope**: What area/module is affected?
 - **Description**: One-line summary of what changed (present tense, imperative mood, <72 chars)
 
-### 4. Execute Commit
+### 5. Execute Commit
 
 ```bash
 # Single line
