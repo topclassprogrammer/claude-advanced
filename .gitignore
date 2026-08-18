@@ -47,3 +47,5 @@ next-env.d.ts
 
 # claude code local overrides
 .claude/settings.local.json
+
+/screenshot
