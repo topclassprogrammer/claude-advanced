@@ -7,11 +7,12 @@ import { Alert, IconCalendar, Spinner } from '@heroui/react';
 import { ApiError } from '@/lib/auth-api';
 import { getMeetingById, type Meeting } from '@/lib/meeting-api';
 import {
+  deleteMeetingFile,
   downloadMeetingFile,
   getMeetingFile,
   type MeetingFile,
 } from '@/lib/meeting-file-api';
-import { getAccessToken } from '@/lib/session';
+import { getAccessToken, getUserIdFromToken } from '@/lib/session';
 import { FileCard } from '@/components/FileCard';
 import { FileUploadForm } from '@/components/FileUploadForm';
 import { UsersIcon } from '@/components/icons/UsersIcon';
@@ -114,11 +115,18 @@ export default function MeetingPage() {
 
             <FileCard
               file={file}
+              canDelete={
+                !!file && meeting.organizerId === getUserIdFromToken(token)
+              }
               onDownload={
                 file
                   ? () => downloadMeetingFile(token, meetingId, file.filename)
                   : async () => {}
               }
+              onDelete={async () => {
+                await deleteMeetingFile(token, meetingId);
+                setFile(null);
+              }}
             />
 
             <FileUploadForm

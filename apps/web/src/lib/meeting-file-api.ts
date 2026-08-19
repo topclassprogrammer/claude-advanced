@@ -96,6 +96,25 @@ export function uploadMeetingFile(
   });
 }
 
+/** Удаляет файл встречи. Доступно только организатору встречи (403 для остальных на бэкенде). */
+export async function deleteMeetingFile(
+  token: string,
+  meetingId: string,
+): Promise<void> {
+  const res = await fetch(`${API_URL}/meetings/${meetingId}/file`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const body: unknown = await res.json().catch(() => null);
+    throw new ApiError(
+      extractErrorMessage(body, 'Не удалось удалить файл'),
+      res.status,
+    );
+  }
+}
+
 /** Скачивает файл встречи с авторизацией и запускает сохранение в браузере через blob-ссылку. */
 export async function downloadMeetingFile(
   token: string,
