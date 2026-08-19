@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Alert, Button, Card, EmptyState, IconCalendar, Spinner } from '@heroui/react';
+import {
+  Alert,
+  Button,
+  Card,
+  EmptyState,
+  IconCalendar,
+  Spinner,
+} from '@heroui/react';
 import { ApiError } from '@/lib/auth-api';
 import { getMeetings, type Meeting } from '@/lib/meeting-api';
 import {
