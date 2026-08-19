@@ -1,6 +1,6 @@
 # apps/api
 
-Бэкенд на NestJS 11 (TypeScript). Реализован модуль пользователей (`UsersModule`) — создание и поиск пользователя, модуль авторизации (`AuthModule`) — регистрация и логин по email/паролю поверх `UsersModule`, выдача JWT, и модуль встреч (`MeetingModule`) поверх `AuthModule`, защищённый JWT-гвардом. Персистентность — PostgreSQL через Prisma ORM 7. Бизнес-логика организована по паттерну CQRS (`@nestjs/cqrs`): мутации — Command, чтения — Query. Взаимодействие между `AuthModule` и `UsersModule` идёт исключительно через `CommandBus`/`QueryBus` — `AuthModule` не обращается к `PrismaService` напрямую и не импортирует хендлеры/провайдеры `UsersModule`.
+Бэкенд на NestJS 11 (TypeScript). Реализован модуль пользователей (`UsersModule`) — создание и поиск пользователя, модуль авторизации (`AuthModule`) — регистрация и логин по email/паролю поверх `UsersModule`, выдача JWT, модуль встреч (`MeetingModule`) поверх `AuthModule`, защищённый JWT-гвардом, и модуль файлов встречи (`MeetingFileModule`) — загрузка/скачивание файла, привязанного к встрече 1:1, файл хранится на локальном диске. Персистентность — PostgreSQL через Prisma ORM 7. Бизнес-логика организована по паттерну CQRS (`@nestjs/cqrs`): мутации — Command, чтения — Query. Взаимодействие между `AuthModule` и `UsersModule` идёт исключительно через `CommandBus`/`QueryBus` — `AuthModule` не обращается к `PrismaService` напрямую и не импортирует хендлеры/провайдеры `UsersModule`.
 
 ## Команды (запускать из этой директории или через `--workspace=api` из корня)
 
@@ -73,9 +73,17 @@ src/
     queries/impl/get-meetings.query.ts, queries/handlers/get-meetings.handler.ts — список встреч текущего пользователя
     queries/impl/get-meeting-by-id.query.ts, queries/handlers/get-meeting-by-id.handler.ts — встреча по id, ищется вместе с organizerId (404, если не найдена или принадлежит другому пользователю)
     dto/create-meeting.dto.ts — class-validator DTO (title, date как ISO8601-строка, participants — массив строк)
+  meeting-file/
+    meeting-file.module.ts               — импортирует CqrsModule и AuthModule (для JwtAuthGuard)
+    meeting-file.controller.ts             — POST /meetings/:id/file (загрузка, `FileInterceptor`+diskStorage), GET /meetings/:id/file/download (скачивание, `StreamableFile`) — под `@UseGuards(JwtAuthGuard)`, доступны любому авторизованному пользователю (не только организатору встречи)
+    meeting-file.constants.ts               — `MAX_FILE_SIZE_BYTES` (100 МБ), `ALLOWED_MIME_TYPES`, `STORAGE_DIR` (`apps/api/storage/meeting-files`, создаётся при загрузке модуля, в `.gitignore`)
+    content-disposition.util.ts              — `buildContentDisposition(filename)` — RFC 5987/6266-заголовок для скачивания с не-ASCII (кириллица) именами файлов
+    commands/impl/upload-meeting-file.command.ts, commands/handlers/upload-meeting-file.handler.ts — проверяет существование встречи (404) и допустимость MIME-типа (400, файл с диска удаляется при отказе), сохраняет запись `MeetingFile`; повторная загрузка на ту же встречу заменяет существующую запись (`upsert` по `meetingId`) и удаляет с диска старый файл после обновления записи в БД
+    queries/impl/download-meeting-file.query.ts, queries/handlers/download-meeting-file.handler.ts — находит `MeetingFile` по `meetingId` (404, если файл не загружен)
 test/
   auth.e2e-spec.ts             — e2e-тесты /auth/register и /auth/login (используют реальную БД, очищают таблицу User в beforeEach)
   meeting.e2e-spec.ts          — e2e-тесты /meetings (используют реальную БД, очищают таблицы Meeting и User в beforeEach; проверяют изоляцию встреч между пользователями)
+  meeting-file.e2e-spec.ts     — e2e-тесты загрузки/скачивания файла встречи (используют реальную БД, очищают таблицы MeetingFile, Meeting и User в beforeEach)
   jest-e2e.json                 — конфиг Jest для e2e
 ```
 
@@ -120,7 +128,13 @@ test/
 - Логин ищет пользователя и не создаёт его при отсутствии (401 Unauthorized); регистрация создаёт пользователя и возвращает 409 Conflict при дубликате email.
 - Роуты `/meetings/*` требуют заголовок `Authorization: Bearer <accessToken>` (проверяется `JwtAuthGuard` из `AuthModule`); `Meeting.organizerId` имеет `onDelete: Cascade` на связи с `User`, чтобы удаление пользователя не оставляло висящих встреч и не ломало очистку таблиц в e2e-тестах.
 - После изменения `prisma/schema.prisma` — прогонять `npm run prisma:migrate:dev` (создаёт и применяет миграцию) и `npm run prisma:generate`.
+- `MeetingFile.mimeType` проверяется по заявленному `file.mimetype` от multer (значение из `Content-Type` части multipart-запроса) против allowlist в `meeting-file.constants.ts` — это значение подделывается клиентом, полноценная проверка по magic bytes не реализована (известный gap безопасности, см. `docs/research-meeting-file-upload.md`, §1).
 
 ## Поддержка документации в актуальном состоянии
 
 При изменении архитектуры приложения (новые модули, изменение структуры `src/`, смена ключевых команд, добавление внешних зависимостей типа БД/очередей/кэша, изменение точки входа или конфигурации) — обновлять этот файл в том же коммите/PR, где вносится изменение. Если изменение затрагивает и корневой монорепозиторий (например, новый workspace-скрипт), обновлять также корневой `CLAUDE.md`.
+
+## Загрузка файла
+Используй @docs/research-meeting-file-upload.md для загрузки файла
+
+

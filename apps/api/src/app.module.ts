@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { MeetingModule } from './meeting/meeting.module';
+import { MeetingFileModule } from './meeting-file/meeting-file.module';
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { MeetingModule } from './meeting/meeting.module';
     PrismaModule,
     AuthModule,
     MeetingModule,
+    MeetingFileModule,
   ],
   providers: [
     {

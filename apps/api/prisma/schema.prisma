@@ -22,11 +22,23 @@ model User {
 }
 
 model Meeting {
-  id           String   @id @default(uuid())
+  id           String       @id @default(uuid())
   title        String
   date         DateTime
   participants String[]
   organizerId  String
-  organizer    User     @relation(fields: [organizerId], references: [id], onDelete: Cascade)
-  createdAt    DateTime @default(now())
+  organizer    User         @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  createdAt    DateTime     @default(now())
+  file         MeetingFile?
+}
+
+model MeetingFile {
+  id          String   @id @default(uuid())
+  meetingId   String   @unique
+  meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  filename    String
+  size        Int
+  mimeType    String
+  storagePath String
+  uploadedAt  DateTime @default(now())
 }
