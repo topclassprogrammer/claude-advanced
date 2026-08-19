@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Alert, Button, Card, EmptyState } from '@heroui/react';
+import { AlertDialog, Alert, Button, Card, EmptyState } from '@heroui/react';
 import type { MeetingFile } from '@/lib/meeting-file-api';
 import { getFileIcon } from '@/lib/file-icon';
 
@@ -23,12 +23,18 @@ function formatUploadedAt(date: string): string {
 
 export function FileCard({
   file,
+  canDelete,
   onDownload,
+  onDelete,
 }: {
   file: MeetingFile | null;
+  canDelete: boolean;
   onDownload: () => Promise<void>;
+  onDelete: () => Promise<void>;
 }) {
   const [downloading, setDownloading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!file) {
@@ -60,6 +66,17 @@ export function FileCard({
     }
   };
 
+  const handleDelete = async () => {
+    setDeleting(true);
+    setError(null);
+    try {
+      await onDelete();
+    } catch {
+      setError('Не удалось удалить файл. Попробуйте ещё раз.');
+      setDeleting(false);
+    }
+  };
+
   return (
     <Card>
       <Card.Header>
@@ -78,9 +95,21 @@ export function FileCard({
               {formatFileSize(file.size)} · {formatUploadedAt(file.uploadedAt)}
             </p>
           </div>
-          <Button onPress={handleDownload} isDisabled={downloading}>
-            {downloading ? 'Скачивание…' : 'Скачать'}
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button onPress={handleDownload} isDisabled={downloading}>
+              {downloading ? 'Скачивание…' : 'Скачать'}
+            </Button>
+            {canDelete ? (
+              <Button
+                variant="outline"
+                className="text-[var(--danger)]"
+                onPress={() => setConfirmOpen(true)}
+                isDisabled={deleting}
+              >
+                {deleting ? 'Удаление…' : 'Удалить'}
+              </Button>
+            ) : null}
+          </div>
         </div>
         {error ? (
           <Alert status="danger">
@@ -91,6 +120,35 @@ export function FileCard({
           </Alert>
         ) : null}
       </Card.Content>
+
+      <AlertDialog isOpen={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialog.Backdrop>
+          <AlertDialog.Container>
+            <AlertDialog.Dialog>
+              <AlertDialog.Header>
+                <AlertDialog.Icon status="danger" />
+                <AlertDialog.Heading>Удалить файл?</AlertDialog.Heading>
+              </AlertDialog.Header>
+              <AlertDialog.Body>
+                Файл «{file.filename}» будет удалён без возможности
+                восстановления.
+              </AlertDialog.Body>
+              <AlertDialog.Footer>
+                <Button slot="close" variant="outline">
+                  Отмена
+                </Button>
+                <Button
+                  slot="close"
+                  className="bg-[var(--danger)] text-[var(--danger-foreground)]"
+                  onPress={handleDelete}
+                >
+                  Удалить
+                </Button>
+              </AlertDialog.Footer>
+            </AlertDialog.Dialog>
+          </AlertDialog.Container>
+        </AlertDialog.Backdrop>
+      </AlertDialog>
     </Card>
   );
 }

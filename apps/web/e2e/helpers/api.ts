@@ -39,6 +39,19 @@ export async function createMeeting(
   return body.id;
 }
 
+export async function getMeeting(
+  token: string,
+  meetingId: string,
+): Promise<{ id: string; title: string; date: string; organizerId: string }> {
+  const res = await fetch(`${API_URL}/meetings/${meetingId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to get meeting: ${res.status} ${await res.text()}`);
+  }
+  return res.json();
+}
+
 export async function uploadMeetingFile(
   token: string,
   meetingId: string,

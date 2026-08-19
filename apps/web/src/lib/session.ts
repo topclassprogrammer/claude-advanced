@@ -25,3 +25,17 @@ export function getEmailFromToken(token: string): string | null {
     return null;
   }
 }
+
+/** Читает id пользователя (sub) из payload JWT без проверки подписи — только для UI-логики (например, определения организатора). */
+export function getUserIdFromToken(token: string): string | null {
+  const payload = token.split('.')[1];
+  if (!payload) return null;
+
+  try {
+    const decoded = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+    const { sub } = JSON.parse(decoded) as { sub?: unknown };
+    return typeof sub === 'string' ? sub : null;
+  } catch {
+    return null;
+  }
+}
