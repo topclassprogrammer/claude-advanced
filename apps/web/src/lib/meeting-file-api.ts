@@ -42,6 +42,60 @@ export async function getMeetingFile(
   return body as MeetingFile;
 }
 
+/**
+ * Загружает файл встречи с отслеживанием прогресса отправки.
+ * Используется XMLHttpRequest, а не fetch: fetch не даёт событий прогресса для тела запроса,
+ * только для чтения ответа (см. docs/research-meeting-file-upload.md, §5).
+ */
+export function uploadMeetingFile(
+  token: string,
+  meetingId: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<MeetingFile> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_URL}/meetings/${meetingId}/file`);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+    xhr.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable) {
+        onProgress?.(Math.round((event.loaded / event.total) * 100));
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      let body: unknown = null;
+      try {
+        body = JSON.parse(xhr.responseText);
+      } catch {
+        body = null;
+      }
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(body as MeetingFile);
+      } else {
+        reject(
+          new ApiError(
+            extractErrorMessage(body, 'Не удалось загрузить файл'),
+            xhr.status,
+          ),
+        );
+      }
+    });
+
+    xhr.addEventListener('error', () => {
+      reject(
+        new ApiError('Не удалось связаться с сервером. Попробуйте ещё раз.', 0),
+      );
+    });
+
+    const form = new FormData();
+    form.append('file', file);
+    xhr.send(form);
+  });
+}
+
 /** Скачивает файл встречи с авторизацией и запускает сохранение в браузере через blob-ссылку. */
 export async function downloadMeetingFile(
   token: string,

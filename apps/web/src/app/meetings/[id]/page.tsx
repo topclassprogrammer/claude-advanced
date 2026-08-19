@@ -13,6 +13,7 @@ import {
 } from '@/lib/meeting-file-api';
 import { getAccessToken } from '@/lib/session';
 import { FileCard } from '@/components/FileCard';
+import { FileUploadForm } from '@/components/FileUploadForm';
 import { UsersIcon } from '@/components/icons/UsersIcon';
 
 const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
@@ -118,6 +119,12 @@ export default function MeetingPage() {
                   ? () => downloadMeetingFile(token, meetingId, file.filename)
                   : async () => {}
               }
+            />
+
+            <FileUploadForm
+              token={token}
+              meetingId={meetingId}
+              onUploaded={setFile}
             />
           </>
         ) : null}

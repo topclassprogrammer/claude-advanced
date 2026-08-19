@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Alert, Button, Card, EmptyState } from '@heroui/react';
 import type { MeetingFile } from '@/lib/meeting-file-api';
-import { FileIcon } from './icons/FileIcon';
+import { getFileIcon } from '@/lib/file-icon';
 
 const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
   dateStyle: 'medium',
@@ -67,7 +67,9 @@ export function FileCard({
       </Card.Header>
       <Card.Content className="flex flex-col gap-3">
         <div className="flex items-center gap-3 rounded-xl bg-default p-4">
-          <FileIcon className="size-6 shrink-0 text-muted" />
+          {getFileIcon(file.mimeType, {
+            className: 'size-6 shrink-0 text-muted',
+          })}
           <div className="min-w-0 flex-1">
             <p className="truncate font-semibold text-foreground">
               {file.filename}
