@@ -26,6 +26,10 @@ describe('MeetingFile (e2e)', () => {
   let app: INestApplication<App>;
 
   const owner = { email: 'file-owner@example.com', password: 'password123' };
+  const stranger = {
+    email: 'file-stranger@example.com',
+    password: 'password123',
+  };
 
   const meetingPayload = {
     title: 'Sprint planning',
@@ -36,6 +40,7 @@ describe('MeetingFile (e2e)', () => {
   const fileContent = 'hello meeting notes';
 
   let ownerToken: string;
+  let strangerToken: string;
   let meetingId: string;
 
   beforeEach(async () => {
@@ -56,6 +61,12 @@ describe('MeetingFile (e2e)', () => {
       .send(owner)
       .expect(201);
     ownerToken = (ownerRes.body as AuthResponseBody).accessToken;
+
+    const strangerRes = await request(app.getHttpServer())
+      .post('/auth/register')
+      .send(stranger)
+      .expect(201);
+    strangerToken = (strangerRes.body as AuthResponseBody).accessToken;
 
     const meetingRes = await request(app.getHttpServer())
       .post('/meetings')
@@ -138,6 +149,120 @@ describe('MeetingFile (e2e)', () => {
         .set('Authorization', `Bearer ${ownerToken}`)
         .expect(200);
       expect(downloadRes.text).toBe(newContent);
+    });
+
+    it('rejects a file exceeding the size limit and does not store it', async () => {
+      const oversizedContent = Buffer.alloc(100 * 1024 * 1024 + 1);
+
+      await request(app.getHttpServer())
+        .post(`/meetings/${meetingId}/file`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .attach('file', oversizedContent, {
+          filename: 'huge.bin',
+          contentType: 'application/pdf',
+        })
+        .expect(413);
+
+      const prisma = app.get(PrismaService);
+      const count = await prisma.meetingFile.count({ where: { meetingId } });
+      expect(count).toBe(0);
+    }, 30000);
+  });
+
+  describe('GET /meetings/:id/file', () => {
+    it('returns the uploaded file metadata', async () => {
+      await request(app.getHttpServer())
+        .post(`/meetings/${meetingId}/file`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .attach('file', Buffer.from(fileContent), {
+          filename: 'notes.txt',
+          contentType: 'text/plain',
+        })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/file`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(200);
+
+      const body = res.body as MeetingFileResponseBody;
+      expect(body.filename).toBe('notes.txt');
+      expect(body.size).toBe(Buffer.byteLength(fileContent));
+      expect(body.mimeType).toBe('text/plain');
+      expect(typeof body.uploadedAt).toBe('string');
+    });
+
+    it('returns 401 when no auth token is provided', async () => {
+      await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/file`)
+        .expect(401);
+    });
+
+    it('returns 404 when the meeting has no uploaded file', async () => {
+      await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/file`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(404);
+    });
+  });
+
+  describe('DELETE /meetings/:id/file', () => {
+    it('deletes the file when requested by the meeting organizer', async () => {
+      await request(app.getHttpServer())
+        .post(`/meetings/${meetingId}/file`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .attach('file', Buffer.from(fileContent), {
+          filename: 'notes.txt',
+          contentType: 'text/plain',
+        })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/file`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(204);
+
+      const prisma = app.get(PrismaService);
+      const count = await prisma.meetingFile.count({ where: { meetingId } });
+      expect(count).toBe(0);
+
+      await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/file/download`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(404);
+    });
+
+    it('returns 403 when requested by a user other than the organizer', async () => {
+      await request(app.getHttpServer())
+        .post(`/meetings/${meetingId}/file`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .attach('file', Buffer.from(fileContent), {
+          filename: 'notes.txt',
+          contentType: 'text/plain',
+        })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/file`)
+        .set('Authorization', `Bearer ${strangerToken}`)
+        .expect(403);
+
+      const prisma = app.get(PrismaService);
+      const count = await prisma.meetingFile.count({ where: { meetingId } });
+      expect(count).toBe(1);
+    });
+
+    it('returns 401 when no auth token is provided', async () => {
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/file`)
+        .expect(401);
+    });
+
+    it('returns 404 when the meeting has no uploaded file', async () => {
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/file`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(404);
     });
   });
 
