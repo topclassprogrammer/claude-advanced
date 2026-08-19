@@ -5,7 +5,7 @@
 - `apps/web` — фронтенд на Next.js (React 19). См. `apps/web/CLAUDE.md`.
 - `apps/api` — бэкенд на NestJS. См. `apps/api/CLAUDE.md`.
 
-В `apps/api` реализован модуль авторизации (регистрация/логин, JWT) и модуль встреч (создание, список) поверх PostgreSQL — подробности в `apps/api/CLAUDE.md`. В `apps/web` реализованы страницы входа (`/auth/login`), регистрации (`/auth/register`) и главная страница (`/`) со списком встреч текущего пользователя — подробности в `apps/web/CLAUDE.md`.
+В `apps/api` реализован модуль авторизации (регистрация/логин, JWT), модуль встреч (создание, список) и модуль файлов встречи (загрузка/скачивание/метаданные/удаление) поверх PostgreSQL — подробности в `apps/api/CLAUDE.md`. В `apps/web` реализованы страницы входа (`/auth/login`), регистрации (`/auth/register`), главная страница (`/`) со списком встреч текущего пользователя и страница встречи (`/meetings/[id]`) с карточкой прикреплённого файла — подробности в `apps/web/CLAUDE.md`.
 
 ## Порты
 
@@ -31,6 +31,7 @@ npm run lint:api
 npm run format        # форматирование обоих приложений
 npm run format:web
 npm run format:api
+npm run test:e2e:web  # Playwright e2e-тесты apps/web (требует apps/api + БД запущенными)
 ```
 
 ## Структура
@@ -46,6 +47,7 @@ apps/
 - Каждый workspace устанавливает и линтует зависимости независимо (`npm install` из корня разрешит оба через workspaces).
 - Перед коммитом запускать `lint` и `format` для затронутого приложения.
 - Тесты API: `npm run test --workspace=api` (unit), `npm run test:e2e --workspace=api` (e2e). Для e2e нужна поднятая БД (`docker compose up -d`) — подробности в `apps/api/CLAUDE.md`, раздел «Тесты».
+- Тесты web: `npm run test:e2e --workspace=web` (Playwright). Требует запущенных `apps/api` и БД (`docker compose up -d`) — тестовые данные готовятся напрямую через API, в обход UI. Подробности в `apps/web/CLAUDE.md`.
 
 ## Поддержка документации в актуальном состоянии
 

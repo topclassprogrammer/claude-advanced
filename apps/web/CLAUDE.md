@@ -1,8 +1,10 @@
 # apps/web
 
-Фронтенд на Next.js 16 (App Router) + React 19 + TypeScript. Реализованы страницы регистрации (`src/app/auth/register/page.tsx`, маршрут `/auth/register`) и входа (`src/app/auth/login/page.tsx`, маршрут `/auth/login`), подключённые к `POST /auth/register` и `POST /auth/login` в `apps/api`; страницы ссылаются друг на друга. Главная страница `src/app/page.tsx` (маршрут `/`) доступна только авторизованным пользователям: содержимое (лого + email + кнопка «Выйти», секции со встречами) выровнено по центру в колонке `max-w-2xl`. Показывает список встреч текущего пользователя, подключённый к `GET /meetings`: секция «Последние встречи» (3 самые новые по `createdAt`, подсвечены `bg-accent-soft`) и секция «Все встречи» (полный список, `bg-default`) — каждая внутри одной `Card` со строками-встречами (заголовок, дата с иконкой `IconCalendar`, участники с иконкой `UsersIcon`).
+Фронтенд на Next.js 16 (App Router) + React 19 + TypeScript. Реализованы страницы регистрации (`src/app/auth/register/page.tsx`, маршрут `/auth/register`) и входа (`src/app/auth/login/page.tsx`, маршрут `/auth/login`), подключённые к `POST /auth/register` и `POST /auth/login` в `apps/api`; страницы ссылаются друг на друга. Главная страница `src/app/page.tsx` (маршрут `/`) доступна только авторизованным пользователям: содержимое (лого + email + кнопка «Выйти», секции со встречами) выровнено по центру в колонке `max-w-2xl`. Показывает список встреч текущего пользователя, подключённый к `GET /meetings`: секция «Последние встречи» (3 самые новые по `createdAt`, подсвечены `bg-accent-soft`) и секция «Все встречи» (полный список, `bg-default`) — каждая внутри одной `Card` со строками-встречами (заголовок, дата с иконкой `IconCalendar`, участники с иконкой `UsersIcon`), ссылка на строку ведёт на `/meetings/[id]`.
 
-Защита `/` — клиентская: при отсутствии `accessToken` в `localStorage` страница редиректит на `/auth/login` через `next/navigation`; серверного middleware/проверки нет.
+Страница встречи `src/app/meetings/[id]/page.tsx` (маршрут `/meetings/[id]`) защищена так же, как `/`. Показывает заголовок встречи (title/дата/участники, подключено к `GET /meetings/:id`) и компонент `FileCard` (`src/components/FileCard.tsx`) — карточку прикреплённого файла встречи (имя, размер, дата загрузки, кнопка «Скачать»), подключённый к `GET /meetings/:id/file` и `GET /meetings/:id/file/download` из `apps/api`. Если файл не загружен — `FileCard` показывает пустое состояние на `EmptyState`. Скачивание файла не является обычной ссылкой: эндпоинт скачивания требует заголовок `Authorization`, поэтому `downloadMeetingFile` (`src/lib/meeting-file-api.ts`) скачивает файл через `fetch` с токеном, оборачивает ответ в blob-URL и запускает сохранение через временный `<a download>`.
+
+Защита `/` и `/meetings/[id]` — клиентская: при отсутствии `accessToken` в `localStorage` страница редиректит на `/auth/login` через `next/navigation`; серверного middleware/проверки нет.
 
 ## UI-библиотека
 
@@ -12,7 +14,7 @@
 
 ## Обращение к API
 
-Адрес `apps/api` задаётся переменной окружения `NEXT_PUBLIC_API_URL` (см. `.env.example`, локально — `.env.local`, по умолчанию `http://localhost:3001`). Клиенты — тонкие обёртки над `fetch`, кидающие `ApiError` с сообщением из ответа API при ошибке: `src/lib/auth-api.ts` (`/auth/register`, `/auth/login`) и `src/lib/meeting-api.ts` (`GET /meetings`, требует `Authorization: Bearer <accessToken>`). API должен разрешать CORS для origin'а веб-приложения (см. `WEB_ORIGIN` в `apps/api/CLAUDE.md`).
+Адрес `apps/api` задаётся переменной окружения `NEXT_PUBLIC_API_URL` (см. `.env.example`, локально — `.env.local`, по умолчанию `http://localhost:3001`). Клиенты — тонкие обёртки над `fetch`, кидающие `ApiError` с сообщением из ответа API при ошибке: `src/lib/auth-api.ts` (`/auth/register`, `/auth/login`), `src/lib/meeting-api.ts` (`GET /meetings`, `GET /meetings/:id`) и `src/lib/meeting-file-api.ts` (`GET /meetings/:id/file` — метаданные файла, 404 трактуется как отсутствие файла и возвращает `null`; `downloadMeetingFile` — скачивание файла через `GET /meetings/:id/file/download`). Все клиенты требуют `Authorization: Bearer <accessToken>`. API должен разрешать CORS для origin'а веб-приложения (см. `WEB_ORIGIN` в `apps/api/CLAUDE.md`).
 
 Токен хранится в `localStorage` под ключом `accessToken`; доступ к нему — только через `src/lib/session.ts` (`getAccessToken`/`setAccessToken`/`clearAccessToken`), а не напрямую. `getEmailFromToken` там же декодирует email из payload JWT (без проверки подписи) для отображения в UI — эндпоинта `/auth/me` в API нет.
 
@@ -24,7 +26,10 @@ npm run build      # продакшн-сборка (next build)
 npm run start        # запуск собранного билда (next start)
 npm run lint           # eslint
 npm run format           # prettier --write .
+npm run test:e2e          # Playwright e2e-тесты (конфиг playwright.config.ts, тесты в e2e/)
 ```
+
+`test:e2e` поднимает `next dev` сам (см. `webServer` в `playwright.config.ts`), но требует запущенных `apps/api` и PostgreSQL (`docker compose up -d` из корня) — тесты обращаются к реальному API через хелперы в `e2e/helpers/api.ts` (регистрация пользователя, создание встречи, загрузка файла напрямую через `fetch`, в обход UI).
 
 ## Структура
 
@@ -37,17 +42,27 @@ src/app/
       page.tsx              — страница регистрации (маршрут /auth/register; форма email/пароль на HeroUI, вызывает src/lib/auth-api.ts, ссылка на /auth/login)
     login/
       page.tsx              — страница входа (маршрут /auth/login; форма email/пароль на HeroUI, вызывает src/lib/auth-api.ts, ссылка на /auth/register)
+  meetings/
+    [id]/
+      page.tsx                — страница встречи (маршрут /meetings/[id]; требует авторизации, показывает заголовок встречи и FileCard)
   globals.css           — глобальные стили (+ импорты tailwindcss и @heroui/styles)
 src/components/
   BrandIcon.tsx              — иконка-лого (синий квадрат с камерой), переиспользуется в Logo.tsx и на главной странице
   Logo.tsx                  — логотип (BrandIcon + название) для страниц авторизации
+  FileCard.tsx               — карточка файла встречи (имя/размер/дата/кнопка «Скачать») + пустое состояние на EmptyState, если файл не загружен
   icons/EyeIcon.tsx           — SVG-иконки EyeIcon/EyeOffIcon (переключатель видимости пароля)
   icons/UsersIcon.tsx         — SVG-иконка участников встречи (список встреч на главной странице)
+  icons/FileIcon.tsx          — SVG-иконка файла (FileCard)
 src/lib/
   auth-api.ts               — fetch-клиент для /auth/* эндпоинтов apps/api (NEXT_PUBLIC_API_URL)
-  meeting-api.ts             — fetch-клиент для GET /meetings
+  meeting-api.ts             — fetch-клиент для GET /meetings, GET /meetings/:id
+  meeting-file-api.ts        — fetch-клиент для GET /meetings/:id/file (метаданные) и GET /meetings/:id/file/download (скачивание через blob)
   session.ts                 — хранение accessToken в localStorage, декодирование email из JWT
 public/                    — статические ассеты (svg-иконки)
+e2e/
+  meeting-file.spec.ts        — Playwright e2e-тест отображения карточки файла встречи и пустого состояния
+  helpers/api.ts                — хелперы для подготовки данных теста напрямую через API apps/api (registerUser/createMeeting/uploadMeetingFile)
+playwright.config.ts       — конфиг Playwright (testDir e2e/, webServer поднимает next dev на localhost:3000)
 postcss.config.mjs         — PostCSS-конфиг с плагином @tailwindcss/postcss
 .env.example               — пример переменных окружения (NEXT_PUBLIC_API_URL)
 ```
@@ -74,5 +89,9 @@ postcss.config.mjs         — PostCSS-конфиг с плагином @tailwin
 
 При изменении архитектуры приложения (новая структура роутов/страниц, добавление state-менеджмента, слоя данных/API-клиента, смена ключевых команд или конфигурации Next.js) — обновлять этот файл в том же коммите/PR, где вносится изменение. Если изменение затрагивает и корневой монорепозиторий, обновлять также корневой `CLAUDE.md`.
 
-
 Все скриншоты сохраняй в папку /screenshot
+
+## Test User
+Login: test@test.com
+Password: 123456
+
