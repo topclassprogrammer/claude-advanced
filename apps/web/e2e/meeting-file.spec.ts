@@ -24,7 +24,7 @@ test('displays attached meeting file card with working download', async ({
   await page.goto(`/meetings/${meetingId}`);
 
   await expect(page.getByText(filename)).toBeVisible();
-  await expect(page.getByText(/Б|КБ|МБ/)).toBeVisible();
+  await expect(page.getByText(/^\d+(\.\d+)?\s(Б|КБ|МБ)/)).toBeVisible();
 
   const downloadButton = page.getByRole('button', { name: /скачать/i });
   await expect(downloadButton).toBeVisible();
