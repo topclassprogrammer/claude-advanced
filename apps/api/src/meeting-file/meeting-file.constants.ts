@@ -3,6 +3,8 @@ import { join } from 'path';
 
 export const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 
+export const MAX_FILES_PER_MEETING = 10;
+
 export const ALLOWED_MIME_TYPES = [
   // видео
   'video/mp4',

@@ -8,6 +8,7 @@ import {
   ALLOWED_MIME_TYPES,
   MAX_FILE_SIZE_BYTES,
   MAX_FILE_SIZE_LABEL,
+  MAX_FILES_PER_MEETING,
 } from '@/lib/meeting-file-constraints';
 import { getFileIcon } from '@/lib/file-icon';
 import { UploadIcon } from './icons/UploadIcon';
@@ -25,11 +26,17 @@ function validateFile(file: File): string | null {
 export function FileUploadForm({
   token,
   meetingId,
+  filesCount,
   onUploaded,
+  compact = false,
 }: {
   token: string;
   meetingId: string;
+  /** Текущее число файлов встречи — форма скрывает зону загрузки, когда достигнут лимит MAX_FILES_PER_MEETING. */
+  filesCount: number;
   onUploaded: (file: MeetingFile) => void;
+  /** Без обёртки Card и заголовка — для встраивания в строку списка встреч. */
+  compact?: boolean;
 }) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -86,68 +93,95 @@ export function FileUploadForm({
     if (file) void startUpload(file);
   };
 
+  const limitReached = filesCount >= MAX_FILES_PER_MEETING;
+
+  const limitNotice = (
+    <div
+      className={`flex flex-col items-center gap-1 rounded-xl border-2 border-dashed border-border text-center text-muted ${
+        compact ? 'p-4' : 'p-6'
+      }`}
+    >
+      <p className="text-sm font-medium text-foreground">
+        Достигнут лимит {MAX_FILES_PER_MEETING} файлов
+      </p>
+      <p className="text-xs">
+        Удалите один из прикреплённых файлов, чтобы загрузить новый.
+      </p>
+    </div>
+  );
+
+  const dropzone = (
+    <div className="flex flex-col gap-3">
+      <label
+        htmlFor={inputId}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={handleDrop}
+        className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed text-center transition-colors focus-within:ring-2 focus-within:ring-accent focus-within:ring-offset-2 ${
+          compact ? 'p-4' : 'p-6'
+        } ${isDragging ? 'border-accent bg-accent-soft' : 'border-border'} ${
+          uploading ? 'pointer-events-none opacity-70' : ''
+        }`}
+      >
+        {uploadingMime ? (
+          getFileIcon(uploadingMime, {
+            className: 'size-6 shrink-0 text-muted',
+          })
+        ) : (
+          <UploadIcon className="size-6 shrink-0 text-muted" />
+        )}
+        <p className="text-sm font-medium text-foreground">
+          {uploadingName
+            ? uploadingName
+            : 'Перетащите файл сюда или нажмите, чтобы выбрать'}
+        </p>
+        <p className="text-xs text-muted">
+          Видео, аудио, документы — до {MAX_FILE_SIZE_LABEL}
+        </p>
+        <input
+          ref={inputRef}
+          id={inputId}
+          type="file"
+          className="sr-only"
+          accept={ALLOWED_MIME_TYPES.join(',')}
+          onChange={handleInputChange}
+          disabled={uploading}
+        />
+      </label>
+
+      {uploading ? (
+        <ProgressBar value={progress} aria-label="Загрузка файла">
+          <ProgressBar.Track>
+            <ProgressBar.Fill />
+          </ProgressBar.Track>
+          <ProgressBar.Output />
+        </ProgressBar>
+      ) : null}
+
+      {error ? (
+        <Alert status="danger">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Description>{error}</Alert.Description>
+          </Alert.Content>
+        </Alert>
+      ) : null}
+    </div>
+  );
+
+  const content = limitReached ? limitNotice : dropzone;
+
+  if (compact) return content;
+
   return (
     <Card>
       <Card.Header>
         <Card.Title>Загрузить файл</Card.Title>
       </Card.Header>
-      <Card.Content className="flex flex-col gap-3">
-        <label
-          htmlFor={inputId}
-          onDragOver={(event) => {
-            event.preventDefault();
-            setIsDragging(true);
-          }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={handleDrop}
-          className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-6 text-center transition-colors focus-within:ring-2 focus-within:ring-accent focus-within:ring-offset-2 ${
-            isDragging ? 'border-accent bg-accent-soft' : 'border-border'
-          } ${uploading ? 'pointer-events-none opacity-70' : ''}`}
-        >
-          {uploadingMime ? (
-            getFileIcon(uploadingMime, {
-              className: 'size-6 shrink-0 text-muted',
-            })
-          ) : (
-            <UploadIcon className="size-6 shrink-0 text-muted" />
-          )}
-          <p className="text-sm font-medium text-foreground">
-            {uploadingName
-              ? uploadingName
-              : 'Перетащите файл сюда или нажмите, чтобы выбрать'}
-          </p>
-          <p className="text-xs text-muted">
-            Видео, аудио, документы — до {MAX_FILE_SIZE_LABEL}
-          </p>
-          <input
-            ref={inputRef}
-            id={inputId}
-            type="file"
-            className="sr-only"
-            accept={ALLOWED_MIME_TYPES.join(',')}
-            onChange={handleInputChange}
-            disabled={uploading}
-          />
-        </label>
-
-        {uploading ? (
-          <ProgressBar value={progress} aria-label="Загрузка файла">
-            <ProgressBar.Track>
-              <ProgressBar.Fill />
-            </ProgressBar.Track>
-            <ProgressBar.Output />
-          </ProgressBar>
-        ) : null}
-
-        {error ? (
-          <Alert status="danger">
-            <Alert.Indicator />
-            <Alert.Content>
-              <Alert.Description>{error}</Alert.Description>
-            </Alert.Content>
-          </Alert>
-        ) : null}
-      </Card.Content>
+      <Card.Content>{content}</Card.Content>
     </Card>
   );
 }

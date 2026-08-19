@@ -4,5 +4,6 @@ export class CreateMeetingCommand {
     public readonly title: string,
     public readonly date: string,
     public readonly participants: string[],
+    public readonly description?: string,
   ) {}
 }

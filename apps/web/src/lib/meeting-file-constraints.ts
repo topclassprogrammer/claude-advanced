@@ -24,3 +24,5 @@ export const ALLOWED_MIME_TYPES = [
 ];
 
 export const MAX_FILE_SIZE_LABEL = '100 МБ';
+
+export const MAX_FILES_PER_MEETING = 10;

@@ -20,32 +20,32 @@ function extractErrorMessage(body: unknown, fallback: string): string {
   return fallback;
 }
 
-export async function getMeetingFile(
+/** Список файлов встречи (до 10, самые новые первыми). */
+export async function getMeetingFiles(
   token: string,
   meetingId: string,
-): Promise<MeetingFile | null> {
-  const res = await fetch(`${API_URL}/meetings/${meetingId}/file`, {
+): Promise<MeetingFile[]> {
+  const res = await fetch(`${API_URL}/meetings/${meetingId}/files`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-
-  if (res.status === 404) return null;
 
   const body: unknown = await res.json().catch(() => null);
 
   if (!res.ok) {
     throw new ApiError(
-      extractErrorMessage(body, 'Не удалось загрузить данные файла встречи'),
+      extractErrorMessage(body, 'Не удалось загрузить список файлов встречи'),
       res.status,
     );
   }
 
-  return body as MeetingFile;
+  return body as MeetingFile[];
 }
 
 /**
  * Загружает файл встречи с отслеживанием прогресса отправки.
  * Используется XMLHttpRequest, а не fetch: fetch не даёт событий прогресса для тела запроса,
  * только для чтения ответа (см. docs/research-meeting-file-upload.md, §5).
+ * Возвращает 409, если у встречи уже прикреплено максимальное число файлов (10).
  */
 export function uploadMeetingFile(
   token: string,
@@ -55,7 +55,7 @@ export function uploadMeetingFile(
 ): Promise<MeetingFile> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${API_URL}/meetings/${meetingId}/file`);
+    xhr.open('POST', `${API_URL}/meetings/${meetingId}/files`);
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
 
     xhr.upload.addEventListener('progress', (event) => {
@@ -100,8 +100,9 @@ export function uploadMeetingFile(
 export async function deleteMeetingFile(
   token: string,
   meetingId: string,
+  fileId: string,
 ): Promise<void> {
-  const res = await fetch(`${API_URL}/meetings/${meetingId}/file`, {
+  const res = await fetch(`${API_URL}/meetings/${meetingId}/files/${fileId}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -119,11 +120,13 @@ export async function deleteMeetingFile(
 export async function downloadMeetingFile(
   token: string,
   meetingId: string,
+  fileId: string,
   filename: string,
 ): Promise<void> {
-  const res = await fetch(`${API_URL}/meetings/${meetingId}/file/download`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await fetch(
+    `${API_URL}/meetings/${meetingId}/files/${fileId}/download`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
 
   if (!res.ok) {
     const body: unknown = await res.json().catch(() => null);

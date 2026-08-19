@@ -58,11 +58,11 @@ export async function uploadMeetingFile(
   filename: string,
   content: string,
   mimeType: string,
-): Promise<void> {
+): Promise<string> {
   const form = new FormData();
   form.append('file', new Blob([content], { type: mimeType }), filename);
 
-  const res = await fetch(`${API_URL}/meetings/${meetingId}/file`, {
+  const res = await fetch(`${API_URL}/meetings/${meetingId}/files`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: form,
@@ -72,4 +72,6 @@ export async function uploadMeetingFile(
       `Failed to upload meeting file: ${res.status} ${await res.text()}`,
     );
   }
+  const body = (await res.json()) as { id: string };
+  return body.id;
 }

@@ -1,9 +1,16 @@
 import { unlink } from 'fs/promises';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { MeetingFile } from '../../../../generated/prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { ALLOWED_MIME_TYPES } from '../../meeting-file.constants';
+import {
+  ALLOWED_MIME_TYPES,
+  MAX_FILES_PER_MEETING,
+} from '../../meeting-file.constants';
 import { UploadMeetingFileCommand } from '../impl/upload-meeting-file.command';
 
 @CommandHandler(UploadMeetingFileCommand)
@@ -30,36 +37,26 @@ export class UploadMeetingFileHandler implements ICommandHandler<
       throw new BadRequestException('Unsupported file type');
     }
 
-    const filename = Buffer.from(file.originalname, 'latin1').toString('utf8');
-
-    const existing = await this.prisma.meetingFile.findUnique({
+    const existingCount = await this.prisma.meetingFile.count({
       where: { meetingId },
     });
+    if (existingCount >= MAX_FILES_PER_MEETING) {
+      await unlink(file.path).catch(() => undefined);
+      throw new ConflictException(
+        `Meeting already has the maximum number of files (${MAX_FILES_PER_MEETING})`,
+      );
+    }
 
-    const meetingFile = await this.prisma.meetingFile.upsert({
-      where: { meetingId },
-      create: {
+    const filename = Buffer.from(file.originalname, 'latin1').toString('utf8');
+
+    return this.prisma.meetingFile.create({
+      data: {
         meetingId,
         filename,
         size: file.size,
         mimeType: file.mimetype,
         storagePath: file.path,
       },
-      update: {
-        filename,
-        size: file.size,
-        mimeType: file.mimetype,
-        storagePath: file.path,
-      },
     });
-
-    // Delete the previously stored file from disk only after the DB record
-    // has been updated to point at the new one, so a mid-write failure never
-    // leaves the meeting without any file on disk.
-    if (existing) {
-      await unlink(existing.storagePath).catch(() => undefined);
-    }
-
-    return meetingFile;
   }
 }

@@ -15,9 +15,16 @@ export class CreateMeetingHandler implements ICommandHandler<
     title,
     date,
     participants,
+    description,
   }: CreateMeetingCommand): Promise<Meeting> {
     return this.prisma.meeting.create({
-      data: { organizerId, title, date: new Date(date), participants },
+      data: {
+        organizerId,
+        title,
+        date: new Date(date),
+        participants,
+        description,
+      },
     });
   }
 }

@@ -13,7 +13,9 @@ interface MeetingResponseBody {
   id: string;
   title: string;
   date: string;
+  description: string | null;
   participants: string[];
+  organizerId: string;
 }
 
 describe('Meeting (e2e)', () => {
@@ -25,6 +27,7 @@ describe('Meeting (e2e)', () => {
   const meetingPayload = {
     title: 'Sprint planning',
     date: '2026-09-01T10:00:00.000Z',
+    description: 'Quarterly planning session',
     participants: ['alice@example.com', 'bob@example.com'],
   };
 
@@ -72,7 +75,21 @@ describe('Meeting (e2e)', () => {
       expect(typeof body.id).toBe('string');
       expect(body.title).toBe(meetingPayload.title);
       expect(new Date(body.date).toISOString()).toBe(meetingPayload.date);
+      expect(body.description).toBe(meetingPayload.description);
       expect(body.participants).toEqual(meetingPayload.participants);
+    });
+
+    it('creates a meeting without a description', async () => {
+      const { description, ...rest } = meetingPayload;
+      void description;
+      const res = await request(app.getHttpServer())
+        .post('/meetings')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send(rest)
+        .expect(201);
+
+      const body = res.body as MeetingResponseBody;
+      expect(body.description).toBeNull();
     });
 
     it('returns 401 when no auth token is provided', async () => {
@@ -218,6 +235,61 @@ describe('Meeting (e2e)', () => {
         .get(`/meetings/${meetingId}`)
         .set('Authorization', `Bearer ${strangerToken}`)
         .expect(404);
+    });
+  });
+
+  describe('DELETE /meetings/:id', () => {
+    it('deletes the meeting for its organizer', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/meetings')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send(meetingPayload)
+        .expect(201);
+      const meetingId = (created.body as MeetingResponseBody).id;
+
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(204);
+
+      await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(404);
+    });
+
+    it('returns 401 when no auth token is provided', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/meetings')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send(meetingPayload)
+        .expect(201);
+      const meetingId = (created.body as MeetingResponseBody).id;
+
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}`)
+        .expect(401);
+    });
+
+    it('returns 404 when the meeting does not exist', async () => {
+      await request(app.getHttpServer())
+        .delete('/meetings/00000000-0000-0000-0000-000000000000')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(404);
+    });
+
+    it('returns 403 when the requester is not the organizer', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/meetings')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send(meetingPayload)
+        .expect(201);
+      const meetingId = (created.body as MeetingResponseBody).id;
+
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}`)
+        .set('Authorization', `Bearer ${strangerToken}`)
+        .expect(403);
     });
   });
 });

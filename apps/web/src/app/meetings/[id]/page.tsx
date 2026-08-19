@@ -9,7 +9,7 @@ import { getMeetingById, type Meeting } from '@/lib/meeting-api';
 import {
   deleteMeetingFile,
   downloadMeetingFile,
-  getMeetingFile,
+  getMeetingFiles,
   type MeetingFile,
 } from '@/lib/meeting-file-api';
 import { getAccessToken, getUserIdFromToken } from '@/lib/session';
@@ -34,7 +34,7 @@ export default function MeetingPage() {
 
   const [token, setToken] = useState<string | null>(null);
   const [meeting, setMeeting] = useState<Meeting | null>(null);
-  const [file, setFile] = useState<MeetingFile | null>(null);
+  const [files, setFiles] = useState<MeetingFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,11 +54,11 @@ export default function MeetingPage() {
 
     Promise.all([
       getMeetingById(token, meetingId),
-      getMeetingFile(token, meetingId),
+      getMeetingFiles(token, meetingId),
     ])
-      .then(([meetingResult, fileResult]) => {
+      .then(([meetingResult, filesResult]) => {
         setMeeting(meetingResult);
-        setFile(fileResult);
+        setFiles(filesResult);
       })
       .catch((err) => {
         setError(
@@ -114,25 +114,22 @@ export default function MeetingPage() {
             </header>
 
             <FileCard
-              file={file}
-              canDelete={
-                !!file && meeting.organizerId === getUserIdFromToken(token)
+              files={files}
+              canDelete={meeting.organizerId === getUserIdFromToken(token)}
+              onDownload={(file) =>
+                downloadMeetingFile(token, meetingId, file.id, file.filename)
               }
-              onDownload={
-                file
-                  ? () => downloadMeetingFile(token, meetingId, file.filename)
-                  : async () => {}
-              }
-              onDelete={async () => {
-                await deleteMeetingFile(token, meetingId);
-                setFile(null);
+              onDelete={async (file) => {
+                await deleteMeetingFile(token, meetingId, file.id);
+                setFiles((prev) => prev.filter((f) => f.id !== file.id));
               }}
             />
 
             <FileUploadForm
               token={token}
               meetingId={meetingId}
-              onUploaded={setFile}
+              filesCount={files.length}
+              onUploaded={(file) => setFiles((prev) => [file, ...prev])}
             />
           </>
         ) : null}

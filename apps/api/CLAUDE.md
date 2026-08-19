@@ -1,6 +1,6 @@
 # apps/api
 
-Бэкенд на NestJS 11 (TypeScript). Реализован модуль пользователей (`UsersModule`) — создание и поиск пользователя, модуль авторизации (`AuthModule`) — регистрация и логин по email/паролю поверх `UsersModule`, выдача JWT, модуль встреч (`MeetingModule`) поверх `AuthModule`, защищённый JWT-гвардом, и модуль файлов встречи (`MeetingFileModule`) — загрузка/скачивание файла, привязанного к встрече 1:1, файл хранится на локальном диске. Персистентность — PostgreSQL через Prisma ORM 7. Бизнес-логика организована по паттерну CQRS (`@nestjs/cqrs`): мутации — Command, чтения — Query. Взаимодействие между `AuthModule` и `UsersModule` идёт исключительно через `CommandBus`/`QueryBus` — `AuthModule` не обращается к `PrismaService` напрямую и не импортирует хендлеры/провайдеры `UsersModule`.
+Бэкенд на NestJS 11 (TypeScript). Реализован модуль пользователей (`UsersModule`) — создание и поиск пользователя, модуль авторизации (`AuthModule`) — регистрация и логин по email/паролю поверх `UsersModule`, выдача JWT, модуль встреч (`MeetingModule`) поверх `AuthModule`, защищённый JWT-гвардом, и модуль файлов встречи (`MeetingFileModule`) — загрузка/скачивание файлов встречи (до 10 на встречу), файлы хранятся на локальном диске. Персистентность — PostgreSQL через Prisma ORM 7. Бизнес-логика организована по паттерну CQRS (`@nestjs/cqrs`): мутации — Command, чтения — Query. Взаимодействие между `AuthModule` и `UsersModule` идёт исключительно через `CommandBus`/`QueryBus` — `AuthModule` не обращается к `PrismaService` напрямую и не импортирует хендлеры/провайдеры `UsersModule`.
 
 ## Команды (запускать из этой директории или через `--workspace=api` из корня)
 
@@ -43,7 +43,7 @@ Prisma 7 требует driver adapter для SQL-провайдеров: исп
 
 ```
 prisma/
-  schema.prisma          — схема БД (модели User, Meeting) и generator/datasource
+  schema.prisma          — схема БД (модели User, Meeting — с необязательным полем description, MeetingFile) и generator/datasource
   migrations/              — SQL-миграции
 src/
   main.ts                    — точка входа, bootstrap Nest-приложения
@@ -68,25 +68,26 @@ src/
     dto/register.dto.ts, dto/login.dto.ts — class-validator DTO
   meeting/
     meeting.module.ts                 — импортирует CqrsModule и AuthModule (для JwtAuthGuard)
-    meeting.controller.ts               — POST /meetings, GET /meetings, GET /meetings/:id — все под `@UseGuards(JwtAuthGuard)`
+    meeting.controller.ts               — POST /meetings, GET /meetings, GET /meetings/:id, DELETE /meetings/:id — все под `@UseGuards(JwtAuthGuard)`
     commands/impl/create-meeting.command.ts, commands/handlers/create-meeting.handler.ts — создание встречи для текущего пользователя (organizerId = sub из токена)
+    commands/impl/delete-meeting.command.ts, commands/handlers/delete-meeting.handler.ts — удаляет встречу: 404, если не найдена; 403, если запрашивающий не организатор; удаление каскадно сносит запись MeetingFile (onDelete: Cascade в схеме), файл на диске (если был) удаляется тем же хендлером
     queries/impl/get-meetings.query.ts, queries/handlers/get-meetings.handler.ts — список встреч текущего пользователя
     queries/impl/get-meeting-by-id.query.ts, queries/handlers/get-meeting-by-id.handler.ts — встреча по id, ищется вместе с organizerId (404, если не найдена или принадлежит другому пользователю)
-    dto/create-meeting.dto.ts — class-validator DTO (title, date как ISO8601-строка, participants — массив строк)
+    dto/create-meeting.dto.ts — class-validator DTO (title, date как ISO8601-строка, description — необязательная строка, participants — массив строк)
   meeting-file/
     meeting-file.module.ts               — импортирует CqrsModule и AuthModule (для JwtAuthGuard)
-    meeting-file.controller.ts             — POST /meetings/:id/file (загрузка), GET /meetings/:id/file (метаданные), GET /meetings/:id/file/download (скачивание, `StreamableFile`), DELETE /meetings/:id/file (204 No Content) — все под `@UseGuards(JwtAuthGuard)`; загрузка/чтение/скачивание доступны любому авторизованному пользователю, удаление — только организатору встречи (403 для остальных)
-    meeting-file.constants.ts               — `MAX_FILE_SIZE_BYTES` (100 МБ), `ALLOWED_MIME_TYPES`, `STORAGE_DIR` (`apps/api/storage/meeting-files`, создаётся при загрузке модуля, в `.gitignore`)
+    meeting-file.controller.ts             — POST /meetings/:id/files (загрузка), GET /meetings/:id/files (список метаданных, до 10), GET /meetings/:id/files/:fileId/download (скачивание, `StreamableFile`), DELETE /meetings/:id/files/:fileId (204 No Content) — все под `@UseGuards(JwtAuthGuard)`; загрузка/чтение/скачивание доступны любому авторизованному пользователю, удаление — только организатору встречи (403 для остальных)
+    meeting-file.constants.ts               — `MAX_FILE_SIZE_BYTES` (100 МБ), `MAX_FILES_PER_MEETING` (10), `ALLOWED_MIME_TYPES`, `STORAGE_DIR` (`apps/api/storage/meeting-files`, создаётся при загрузке модуля, в `.gitignore`)
     content-disposition.util.ts              — `buildContentDisposition(filename)` — обёртка над пакетом `content-disposition` (RFC 6266), корректно экранирует спецсимволы и не-ASCII (кириллица) имена файлов
-    filters/multer-exception.filter.ts       — `MulterExceptionFilter` (`@Catch(MulterError)`), применяется на `POST :id/file` — превращает multer'овскую `LIMIT_FILE_SIZE` в понятный JSON-ответ 413, остальные multer-ошибки — 400
-    commands/impl/upload-meeting-file.command.ts, commands/handlers/upload-meeting-file.handler.ts — проверяет существование встречи (404) и допустимость MIME-типа (400, файл с диска удаляется при отказе), сохраняет запись `MeetingFile`; повторная загрузка на ту же встречу заменяет существующую запись (`upsert` по `meetingId`) и удаляет с диска старый файл после обновления записи в БД
-    commands/impl/delete-meeting-file.command.ts, commands/handlers/delete-meeting-file.handler.ts — удаляет файл встречи: 404, если встреча или файл не найдены; 403, если запрашивающий не организатор встречи; удаляет запись в БД и файл с диска
-    queries/impl/download-meeting-file.query.ts, queries/handlers/download-meeting-file.handler.ts — находит `MeetingFile` по `meetingId` (404, если файл не загружен), для скачивания
-    queries/impl/get-meeting-file.query.ts, queries/handlers/get-meeting-file.handler.ts — находит `MeetingFile` по `meetingId` (404, если файл не загружен), для метаданных
+    filters/multer-exception.filter.ts       — `MulterExceptionFilter` (`@Catch(MulterError)`), применяется на `POST :id/files` — превращает multer'овскую `LIMIT_FILE_SIZE` в понятный JSON-ответ 413, остальные multer-ошибки — 400
+    commands/impl/upload-meeting-file.command.ts, commands/handlers/upload-meeting-file.handler.ts — проверяет существование встречи (404), допустимость MIME-типа (400, файл с диска удаляется при отказе) и лимит файлов на встречу (409 `ConflictException`, файл с диска удаляется при отказе, если у встречи уже `MAX_FILES_PER_MEETING` записей `MeetingFile`), затем создаёт новую запись `MeetingFile` (файлы не заменяют друг друга — встреча может иметь до 10 одновременно)
+    commands/impl/delete-meeting-file.command.ts, commands/handlers/delete-meeting-file.handler.ts — удаляет один файл встречи по `fileId`: 404, если встреча не найдена или файл не найден/принадлежит другой встрече; 403, если запрашивающий не организатор встречи; удаляет запись в БД и файл с диска
+    queries/impl/download-meeting-file.query.ts, queries/handlers/download-meeting-file.handler.ts — находит `MeetingFile` по `fileId` (404, если не найден или `meetingId` не совпадает), для скачивания
+    queries/impl/get-meeting-files.query.ts, queries/handlers/get-meeting-files.handler.ts — список `MeetingFile` по `meetingId`, отсортированный по `uploadedAt` по убыванию (самые новые первыми); пустой список, если файлов нет
 test/
   auth.e2e-spec.ts             — e2e-тесты /auth/register и /auth/login (используют реальную БД, очищают таблицу User в beforeEach)
   meeting.e2e-spec.ts          — e2e-тесты /meetings (используют реальную БД, очищают таблицы Meeting и User в beforeEach; проверяют изоляцию встреч между пользователями)
-  meeting-file.e2e-spec.ts     — e2e-тесты загрузки/скачивания файла встречи (используют реальную БД, очищают таблицы MeetingFile, Meeting и User в beforeEach)
+  meeting-file.e2e-spec.ts     — e2e-тесты загрузки/списка/скачивания/удаления файлов встречи, включая лимит 10 файлов на встречу (409 на 11-й) и выборочное удаление одного файла (используют реальную БД, очищают таблицы MeetingFile, Meeting и User в beforeEach)
   jest-e2e.json                 — конфиг Jest для e2e
 ```
 

@@ -1,7 +1,6 @@
-export class DeleteMeetingFileCommand {
+export class DeleteMeetingCommand {
   constructor(
     public readonly meetingId: string,
-    public readonly fileId: string,
     public readonly requesterId: string,
   ) {}
 }

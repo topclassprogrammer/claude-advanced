@@ -5,10 +5,10 @@ import { DeleteMeetingFileHandler } from './commands/handlers/delete-meeting-fil
 import { UploadMeetingFileHandler } from './commands/handlers/upload-meeting-file.handler';
 import { MeetingFileController } from './meeting-file.controller';
 import { DownloadMeetingFileHandler } from './queries/handlers/download-meeting-file.handler';
-import { GetMeetingFileHandler } from './queries/handlers/get-meeting-file.handler';
+import { GetMeetingFilesHandler } from './queries/handlers/get-meeting-files.handler';
 
 const CommandHandlers = [UploadMeetingFileHandler, DeleteMeetingFileHandler];
-const QueryHandlers = [DownloadMeetingFileHandler, GetMeetingFileHandler];
+const QueryHandlers = [DownloadMeetingFileHandler, GetMeetingFilesHandler];
 
 @Module({
   imports: [CqrsModule, AuthModule],

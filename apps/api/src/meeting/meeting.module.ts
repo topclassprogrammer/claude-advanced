@@ -3,10 +3,11 @@ import { CqrsModule } from '@nestjs/cqrs';
 import { AuthModule } from '../auth/auth.module';
 import { MeetingController } from './meeting.controller';
 import { CreateMeetingHandler } from './commands/handlers/create-meeting.handler';
+import { DeleteMeetingHandler } from './commands/handlers/delete-meeting.handler';
 import { GetMeetingsHandler } from './queries/handlers/get-meetings.handler';
 import { GetMeetingByIdHandler } from './queries/handlers/get-meeting-by-id.handler';
 
-const CommandHandlers = [CreateMeetingHandler];
+const CommandHandlers = [CreateMeetingHandler, DeleteMeetingHandler];
 const QueryHandlers = [GetMeetingsHandler, GetMeetingByIdHandler];
 
 @Module({

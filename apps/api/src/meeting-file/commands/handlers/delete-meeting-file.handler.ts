@@ -13,6 +13,7 @@ export class DeleteMeetingFileHandler implements ICommandHandler<
 
   async execute({
     meetingId,
+    fileId,
     requesterId,
   }: DeleteMeetingFileCommand): Promise<void> {
     const meeting = await this.prisma.meeting.findUnique({
@@ -24,18 +25,18 @@ export class DeleteMeetingFileHandler implements ICommandHandler<
 
     if (meeting.organizerId !== requesterId) {
       throw new ForbiddenException(
-        'Only the meeting organizer can delete the file',
+        'Only the meeting organizer can delete files',
       );
     }
 
     const file = await this.prisma.meetingFile.findUnique({
-      where: { meetingId },
+      where: { id: fileId },
     });
-    if (!file) {
+    if (!file || file.meetingId !== meetingId) {
       throw new NotFoundException('Meeting file not found');
     }
 
-    await this.prisma.meetingFile.delete({ where: { meetingId } });
+    await this.prisma.meetingFile.delete({ where: { id: fileId } });
     await unlink(file.storagePath).catch(() => undefined);
   }
 }

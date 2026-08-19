@@ -43,6 +43,19 @@ describe('MeetingFile (e2e)', () => {
   let strangerToken: string;
   let meetingId: string;
 
+  const uploadFile = (
+    token: string,
+    filename: string,
+    content: string,
+  ): request.Test =>
+    request(app.getHttpServer())
+      .post(`/meetings/${meetingId}/files`)
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', Buffer.from(content), {
+        filename,
+        contentType: 'text/plain',
+      });
+
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -80,16 +93,11 @@ describe('MeetingFile (e2e)', () => {
     await app.close();
   });
 
-  describe('POST /meetings/:id/file', () => {
+  describe('POST /meetings/:id/files', () => {
     it('uploads a file and stores its metadata', async () => {
-      const res = await request(app.getHttpServer())
-        .post(`/meetings/${meetingId}/file`)
-        .set('Authorization', `Bearer ${ownerToken}`)
-        .attach('file', Buffer.from(fileContent), {
-          filename: 'notes.txt',
-          contentType: 'text/plain',
-        })
-        .expect(201);
+      const res = await uploadFile(ownerToken, 'notes.txt', fileContent).expect(
+        201,
+      );
 
       const body = res.body as MeetingFileResponseBody;
       expect(body.meetingId).toBe(meetingId);
@@ -101,61 +109,59 @@ describe('MeetingFile (e2e)', () => {
 
     it('returns 401 when no auth token is provided', async () => {
       await request(app.getHttpServer())
-        .post(`/meetings/${meetingId}/file`)
+        .post(`/meetings/${meetingId}/files`)
         .attach('file', Buffer.from(fileContent), 'notes.txt')
         .expect(401);
     });
 
     it('returns 404 when the meeting does not exist', async () => {
       await request(app.getHttpServer())
-        .post('/meetings/00000000-0000-0000-0000-000000000000/file')
+        .post('/meetings/00000000-0000-0000-0000-000000000000/files')
         .set('Authorization', `Bearer ${ownerToken}`)
         .attach('file', Buffer.from(fileContent), 'notes.txt')
         .expect(404);
     });
 
-    it('replaces the previously uploaded file on re-upload', async () => {
-      const firstRes = await request(app.getHttpServer())
-        .post(`/meetings/${meetingId}/file`)
-        .set('Authorization', `Bearer ${ownerToken}`)
-        .attach('file', Buffer.from(fileContent), {
-          filename: 'notes.txt',
-          contentType: 'text/plain',
-        })
-        .expect(201);
+    it('adds a second file alongside the first instead of replacing it', async () => {
+      const firstRes = await uploadFile(
+        ownerToken,
+        'notes.txt',
+        fileContent,
+      ).expect(201);
       const firstBody = firstRes.body as MeetingFileResponseBody;
 
       const newContent = 'updated meeting notes';
-      const secondRes = await request(app.getHttpServer())
-        .post(`/meetings/${meetingId}/file`)
-        .set('Authorization', `Bearer ${ownerToken}`)
-        .attach('file', Buffer.from(newContent), {
-          filename: 'updated-notes.txt',
-          contentType: 'text/plain',
-        })
-        .expect(201);
+      const secondRes = await uploadFile(
+        ownerToken,
+        'updated-notes.txt',
+        newContent,
+      ).expect(201);
       const secondBody = secondRes.body as MeetingFileResponseBody;
 
-      // Same MeetingFile record (1:1 with the meeting), not a second row.
-      expect(secondBody.id).toBe(firstBody.id);
-      expect(secondBody.filename).toBe('updated-notes.txt');
+      expect(secondBody.id).not.toBe(firstBody.id);
 
       const prisma = app.get(PrismaService);
       const count = await prisma.meetingFile.count({ where: { meetingId } });
-      expect(count).toBe(1);
+      expect(count).toBe(2);
+    });
 
-      const downloadRes = await request(app.getHttpServer())
-        .get(`/meetings/${meetingId}/file/download`)
-        .set('Authorization', `Bearer ${ownerToken}`)
-        .expect(200);
-      expect(downloadRes.text).toBe(newContent);
+    it('rejects an 11th file once the meeting already has 10', async () => {
+      for (let i = 0; i < 10; i += 1) {
+        await uploadFile(ownerToken, `notes-${i}.txt`, fileContent).expect(201);
+      }
+
+      await uploadFile(ownerToken, 'notes-10.txt', fileContent).expect(409);
+
+      const prisma = app.get(PrismaService);
+      const count = await prisma.meetingFile.count({ where: { meetingId } });
+      expect(count).toBe(10);
     });
 
     it('rejects a file exceeding the size limit and does not store it', async () => {
       const oversizedContent = Buffer.alloc(100 * 1024 * 1024 + 1);
 
       await request(app.getHttpServer())
-        .post(`/meetings/${meetingId}/file`)
+        .post(`/meetings/${meetingId}/files`)
         .set('Authorization', `Bearer ${ownerToken}`)
         .attach('file', oversizedContent, {
           filename: 'huge.bin',
@@ -169,56 +175,49 @@ describe('MeetingFile (e2e)', () => {
     }, 30000);
   });
 
-  describe('GET /meetings/:id/file', () => {
-    it('returns the uploaded file metadata', async () => {
-      await request(app.getHttpServer())
-        .post(`/meetings/${meetingId}/file`)
-        .set('Authorization', `Bearer ${ownerToken}`)
-        .attach('file', Buffer.from(fileContent), {
-          filename: 'notes.txt',
-          contentType: 'text/plain',
-        })
-        .expect(201);
+  describe('GET /meetings/:id/files', () => {
+    it('returns the uploaded files, most recent first', async () => {
+      await uploadFile(ownerToken, 'notes.txt', fileContent).expect(201);
+      await uploadFile(ownerToken, 'notes-2.txt', 'second file').expect(201);
 
       const res = await request(app.getHttpServer())
-        .get(`/meetings/${meetingId}/file`)
+        .get(`/meetings/${meetingId}/files`)
         .set('Authorization', `Bearer ${ownerToken}`)
         .expect(200);
 
-      const body = res.body as MeetingFileResponseBody;
-      expect(body.filename).toBe('notes.txt');
-      expect(body.size).toBe(Buffer.byteLength(fileContent));
-      expect(body.mimeType).toBe('text/plain');
-      expect(typeof body.uploadedAt).toBe('string');
+      const body = res.body as MeetingFileResponseBody[];
+      expect(body).toHaveLength(2);
+      expect(body[0].filename).toBe('notes-2.txt');
+      expect(body[1].filename).toBe('notes.txt');
     });
 
     it('returns 401 when no auth token is provided', async () => {
       await request(app.getHttpServer())
-        .get(`/meetings/${meetingId}/file`)
+        .get(`/meetings/${meetingId}/files`)
         .expect(401);
     });
 
-    it('returns 404 when the meeting has no uploaded file', async () => {
-      await request(app.getHttpServer())
-        .get(`/meetings/${meetingId}/file`)
+    it('returns an empty list when the meeting has no uploaded files', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/files`)
         .set('Authorization', `Bearer ${ownerToken}`)
-        .expect(404);
+        .expect(200);
+
+      expect(res.body).toEqual([]);
     });
   });
 
-  describe('DELETE /meetings/:id/file', () => {
+  describe('DELETE /meetings/:id/files/:fileId', () => {
     it('deletes the file when requested by the meeting organizer', async () => {
-      await request(app.getHttpServer())
-        .post(`/meetings/${meetingId}/file`)
-        .set('Authorization', `Bearer ${ownerToken}`)
-        .attach('file', Buffer.from(fileContent), {
-          filename: 'notes.txt',
-          contentType: 'text/plain',
-        })
-        .expect(201);
+      const uploadRes = await uploadFile(
+        ownerToken,
+        'notes.txt',
+        fileContent,
+      ).expect(201);
+      const fileId = (uploadRes.body as MeetingFileResponseBody).id;
 
       await request(app.getHttpServer())
-        .delete(`/meetings/${meetingId}/file`)
+        .delete(`/meetings/${meetingId}/files/${fileId}`)
         .set('Authorization', `Bearer ${ownerToken}`)
         .expect(204);
 
@@ -227,23 +226,43 @@ describe('MeetingFile (e2e)', () => {
       expect(count).toBe(0);
 
       await request(app.getHttpServer())
-        .get(`/meetings/${meetingId}/file/download`)
+        .get(`/meetings/${meetingId}/files/${fileId}/download`)
         .set('Authorization', `Bearer ${ownerToken}`)
         .expect(404);
     });
 
-    it('returns 403 when requested by a user other than the organizer', async () => {
-      await request(app.getHttpServer())
-        .post(`/meetings/${meetingId}/file`)
-        .set('Authorization', `Bearer ${ownerToken}`)
-        .attach('file', Buffer.from(fileContent), {
-          filename: 'notes.txt',
-          contentType: 'text/plain',
-        })
-        .expect(201);
+    it('deletes only the targeted file, leaving the others attached', async () => {
+      const firstRes = await uploadFile(
+        ownerToken,
+        'notes.txt',
+        fileContent,
+      ).expect(201);
+      const firstFileId = (firstRes.body as MeetingFileResponseBody).id;
+      await uploadFile(ownerToken, 'notes-2.txt', 'second file').expect(201);
 
       await request(app.getHttpServer())
-        .delete(`/meetings/${meetingId}/file`)
+        .delete(`/meetings/${meetingId}/files/${firstFileId}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(204);
+
+      const prisma = app.get(PrismaService);
+      const remaining = await prisma.meetingFile.findMany({
+        where: { meetingId },
+      });
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].filename).toBe('notes-2.txt');
+    });
+
+    it('returns 403 when requested by a user other than the organizer', async () => {
+      const uploadRes = await uploadFile(
+        ownerToken,
+        'notes.txt',
+        fileContent,
+      ).expect(201);
+      const fileId = (uploadRes.body as MeetingFileResponseBody).id;
+
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/files/${fileId}`)
         .set('Authorization', `Bearer ${strangerToken}`)
         .expect(403);
 
@@ -253,32 +272,39 @@ describe('MeetingFile (e2e)', () => {
     });
 
     it('returns 401 when no auth token is provided', async () => {
+      const uploadRes = await uploadFile(
+        ownerToken,
+        'notes.txt',
+        fileContent,
+      ).expect(201);
+      const fileId = (uploadRes.body as MeetingFileResponseBody).id;
+
       await request(app.getHttpServer())
-        .delete(`/meetings/${meetingId}/file`)
+        .delete(`/meetings/${meetingId}/files/${fileId}`)
         .expect(401);
     });
 
-    it('returns 404 when the meeting has no uploaded file', async () => {
+    it('returns 404 when the file does not exist', async () => {
       await request(app.getHttpServer())
-        .delete(`/meetings/${meetingId}/file`)
+        .delete(
+          `/meetings/${meetingId}/files/00000000-0000-0000-0000-000000000000`,
+        )
         .set('Authorization', `Bearer ${ownerToken}`)
         .expect(404);
     });
   });
 
-  describe('GET /meetings/:id/file/download', () => {
+  describe('GET /meetings/:id/files/:fileId/download', () => {
     it('downloads the previously uploaded file with matching content', async () => {
-      await request(app.getHttpServer())
-        .post(`/meetings/${meetingId}/file`)
-        .set('Authorization', `Bearer ${ownerToken}`)
-        .attach('file', Buffer.from(fileContent), {
-          filename: 'notes.txt',
-          contentType: 'text/plain',
-        })
-        .expect(201);
+      const uploadRes = await uploadFile(
+        ownerToken,
+        'notes.txt',
+        fileContent,
+      ).expect(201);
+      const fileId = (uploadRes.body as MeetingFileResponseBody).id;
 
       const res = await request(app.getHttpServer())
-        .get(`/meetings/${meetingId}/file/download`)
+        .get(`/meetings/${meetingId}/files/${fileId}/download`)
         .set('Authorization', `Bearer ${ownerToken}`)
         .expect(200);
 
@@ -288,14 +314,23 @@ describe('MeetingFile (e2e)', () => {
     });
 
     it('returns 401 when no auth token is provided', async () => {
+      const uploadRes = await uploadFile(
+        ownerToken,
+        'notes.txt',
+        fileContent,
+      ).expect(201);
+      const fileId = (uploadRes.body as MeetingFileResponseBody).id;
+
       await request(app.getHttpServer())
-        .get(`/meetings/${meetingId}/file/download`)
+        .get(`/meetings/${meetingId}/files/${fileId}/download`)
         .expect(401);
     });
 
-    it('returns 404 when the meeting has no uploaded file', async () => {
+    it('returns 404 when the file does not exist', async () => {
       await request(app.getHttpServer())
-        .get(`/meetings/${meetingId}/file/download`)
+        .get(
+          `/meetings/${meetingId}/files/00000000-0000-0000-0000-000000000000/download`,
+        )
         .set('Authorization', `Bearer ${ownerToken}`)
         .expect(404);
     });

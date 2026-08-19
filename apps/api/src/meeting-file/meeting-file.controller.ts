@@ -31,7 +31,7 @@ import { buildContentDisposition } from './content-disposition.util';
 import { MulterExceptionFilter } from './filters/multer-exception.filter';
 import { MAX_FILE_SIZE_BYTES, STORAGE_DIR } from './meeting-file.constants';
 import { DownloadMeetingFileQuery } from './queries/impl/download-meeting-file.query';
-import { GetMeetingFileQuery } from './queries/impl/get-meeting-file.query';
+import { GetMeetingFilesQuery } from './queries/impl/get-meeting-files.query';
 
 @UseGuards(JwtAuthGuard)
 @Controller('meetings')
@@ -41,7 +41,7 @@ export class MeetingFileController {
     private readonly queryBus: QueryBus,
   ) {}
 
-  @Post(':id/file')
+  @Post(':id/files')
   @UseFilters(MulterExceptionFilter)
   @UseInterceptors(
     FileInterceptor('file', {
@@ -67,22 +67,23 @@ export class MeetingFileController {
     );
   }
 
-  @Get(':id/file')
-  getMetadata(@Param('id') meetingId: string) {
-    return this.queryBus.execute<GetMeetingFileQuery, MeetingFile>(
-      new GetMeetingFileQuery(meetingId),
+  @Get(':id/files')
+  list(@Param('id') meetingId: string) {
+    return this.queryBus.execute<GetMeetingFilesQuery, MeetingFile[]>(
+      new GetMeetingFilesQuery(meetingId),
     );
   }
 
-  @Get(':id/file/download')
+  @Get(':id/files/:fileId/download')
   async download(
     @Param('id') meetingId: string,
+    @Param('fileId') fileId: string,
     @Res({ passthrough: true }) res: Response,
   ) {
     const file = await this.queryBus.execute<
       DownloadMeetingFileQuery,
       MeetingFile
-    >(new DownloadMeetingFileQuery(meetingId));
+    >(new DownloadMeetingFileQuery(meetingId, fileId));
     res.set({
       'Content-Type': file.mimeType,
       'Content-Disposition': buildContentDisposition(file.filename),
@@ -90,14 +91,15 @@ export class MeetingFileController {
     return new StreamableFile(createReadStream(file.storagePath));
   }
 
-  @Delete(':id/file')
+  @Delete(':id/files/:fileId')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') meetingId: string,
+    @Param('fileId') fileId: string,
   ) {
     return this.commandBus.execute(
-      new DeleteMeetingFileCommand(meetingId, user.sub),
+      new DeleteMeetingFileCommand(meetingId, fileId, user.sub),
     );
   }
 }
