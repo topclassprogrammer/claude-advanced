@@ -10,6 +10,10 @@ node_modules/
 
 # testing / coverage
 coverage/
+playwright-report/
+test-results/
+/apps/web/blob-report/
+.playwright-mcp/
 
 # next.js
 .next/
