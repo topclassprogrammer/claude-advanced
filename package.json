@@ -21,6 +21,7 @@
     "format": "npm run format --workspaces",
     "format:web": "npm run format --workspace=web",
     "format:api": "npm run format --workspace=api",
+    "test:e2e:web": "npm run test:e2e --workspace=web",
     "prepare": "husky"
   }
 }

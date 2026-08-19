@@ -36,3 +36,23 @@ export async function getMeetings(token: string): Promise<Meeting[]> {
 
   return body as Meeting[];
 }
+
+export async function getMeetingById(
+  token: string,
+  id: string,
+): Promise<Meeting> {
+  const res = await fetch(`${API_URL}/meetings/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const body: unknown = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    throw new ApiError(
+      extractErrorMessage(body, 'Не удалось загрузить встречу'),
+      res.status,
+    );
+  }
+
+  return body as Meeting;
+}
