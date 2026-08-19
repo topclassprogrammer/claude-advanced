@@ -75,11 +75,14 @@ src/
     dto/create-meeting.dto.ts — class-validator DTO (title, date как ISO8601-строка, participants — массив строк)
   meeting-file/
     meeting-file.module.ts               — импортирует CqrsModule и AuthModule (для JwtAuthGuard)
-    meeting-file.controller.ts             — POST /meetings/:id/file (загрузка, `FileInterceptor`+diskStorage), GET /meetings/:id/file/download (скачивание, `StreamableFile`) — под `@UseGuards(JwtAuthGuard)`, доступны любому авторизованному пользователю (не только организатору встречи)
+    meeting-file.controller.ts             — POST /meetings/:id/file (загрузка), GET /meetings/:id/file (метаданные), GET /meetings/:id/file/download (скачивание, `StreamableFile`), DELETE /meetings/:id/file (204 No Content) — все под `@UseGuards(JwtAuthGuard)`; загрузка/чтение/скачивание доступны любому авторизованному пользователю, удаление — только организатору встречи (403 для остальных)
     meeting-file.constants.ts               — `MAX_FILE_SIZE_BYTES` (100 МБ), `ALLOWED_MIME_TYPES`, `STORAGE_DIR` (`apps/api/storage/meeting-files`, создаётся при загрузке модуля, в `.gitignore`)
-    content-disposition.util.ts              — `buildContentDisposition(filename)` — RFC 5987/6266-заголовок для скачивания с не-ASCII (кириллица) именами файлов
+    content-disposition.util.ts              — `buildContentDisposition(filename)` — обёртка над пакетом `content-disposition` (RFC 6266), корректно экранирует спецсимволы и не-ASCII (кириллица) имена файлов
+    filters/multer-exception.filter.ts       — `MulterExceptionFilter` (`@Catch(MulterError)`), применяется на `POST :id/file` — превращает multer'овскую `LIMIT_FILE_SIZE` в понятный JSON-ответ 413, остальные multer-ошибки — 400
     commands/impl/upload-meeting-file.command.ts, commands/handlers/upload-meeting-file.handler.ts — проверяет существование встречи (404) и допустимость MIME-типа (400, файл с диска удаляется при отказе), сохраняет запись `MeetingFile`; повторная загрузка на ту же встречу заменяет существующую запись (`upsert` по `meetingId`) и удаляет с диска старый файл после обновления записи в БД
-    queries/impl/download-meeting-file.query.ts, queries/handlers/download-meeting-file.handler.ts — находит `MeetingFile` по `meetingId` (404, если файл не загружен)
+    commands/impl/delete-meeting-file.command.ts, commands/handlers/delete-meeting-file.handler.ts — удаляет файл встречи: 404, если встреча или файл не найдены; 403, если запрашивающий не организатор встречи; удаляет запись в БД и файл с диска
+    queries/impl/download-meeting-file.query.ts, queries/handlers/download-meeting-file.handler.ts — находит `MeetingFile` по `meetingId` (404, если файл не загружен), для скачивания
+    queries/impl/get-meeting-file.query.ts, queries/handlers/get-meeting-file.handler.ts — находит `MeetingFile` по `meetingId` (404, если файл не загружен), для метаданных
 test/
   auth.e2e-spec.ts             — e2e-тесты /auth/register и /auth/login (используют реальную БД, очищают таблицу User в beforeEach)
   meeting.e2e-spec.ts          — e2e-тесты /meetings (используют реальную БД, очищают таблицы Meeting и User в beforeEach; проверяют изоляцию встреч между пользователями)
@@ -129,6 +132,7 @@ test/
 - Роуты `/meetings/*` требуют заголовок `Authorization: Bearer <accessToken>` (проверяется `JwtAuthGuard` из `AuthModule`); `Meeting.organizerId` имеет `onDelete: Cascade` на связи с `User`, чтобы удаление пользователя не оставляло висящих встреч и не ломало очистку таблиц в e2e-тестах.
 - После изменения `prisma/schema.prisma` — прогонять `npm run prisma:migrate:dev` (создаёт и применяет миграцию) и `npm run prisma:generate`.
 - `MeetingFile.mimeType` проверяется по заявленному `file.mimetype` от multer (значение из `Content-Type` части multipart-запроса) против allowlist в `meeting-file.constants.ts` — это значение подделывается клиентом, полноценная проверка по magic bytes не реализована (известный gap безопасности, см. `docs/research-meeting-file-upload.md`, §1).
+- Авторизация на файл встречи асимметрична: загрузка/чтение метаданных/скачивание доступны любому авторизованному пользователю системы (по PRD), удаление — только организатору встречи (403 для остальных, `DeleteMeetingFileHandler` сверяет `Meeting.organizerId` с `requesterId` из JWT).
 
 ## Поддержка документации в актуальном состоянии
 
