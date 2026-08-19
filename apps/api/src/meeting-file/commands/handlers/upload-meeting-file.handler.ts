@@ -32,14 +32,34 @@ export class UploadMeetingFileHandler implements ICommandHandler<
 
     const filename = Buffer.from(file.originalname, 'latin1').toString('utf8');
 
-    return this.prisma.meetingFile.create({
-      data: {
+    const existing = await this.prisma.meetingFile.findUnique({
+      where: { meetingId },
+    });
+
+    const meetingFile = await this.prisma.meetingFile.upsert({
+      where: { meetingId },
+      create: {
         meetingId,
         filename,
         size: file.size,
         mimeType: file.mimetype,
         storagePath: file.path,
       },
+      update: {
+        filename,
+        size: file.size,
+        mimeType: file.mimetype,
+        storagePath: file.path,
+      },
     });
+
+    // Delete the previously stored file from disk only after the DB record
+    // has been updated to point at the new one, so a mid-write failure never
+    // leaves the meeting without any file on disk.
+    if (existing) {
+      await unlink(existing.storagePath).catch(() => undefined);
+    }
+
+    return meetingFile;
   }
 }

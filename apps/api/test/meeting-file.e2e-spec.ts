@@ -102,6 +102,43 @@ describe('MeetingFile (e2e)', () => {
         .attach('file', Buffer.from(fileContent), 'notes.txt')
         .expect(404);
     });
+
+    it('replaces the previously uploaded file on re-upload', async () => {
+      const firstRes = await request(app.getHttpServer())
+        .post(`/meetings/${meetingId}/file`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .attach('file', Buffer.from(fileContent), {
+          filename: 'notes.txt',
+          contentType: 'text/plain',
+        })
+        .expect(201);
+      const firstBody = firstRes.body as MeetingFileResponseBody;
+
+      const newContent = 'updated meeting notes';
+      const secondRes = await request(app.getHttpServer())
+        .post(`/meetings/${meetingId}/file`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .attach('file', Buffer.from(newContent), {
+          filename: 'updated-notes.txt',
+          contentType: 'text/plain',
+        })
+        .expect(201);
+      const secondBody = secondRes.body as MeetingFileResponseBody;
+
+      // Same MeetingFile record (1:1 with the meeting), not a second row.
+      expect(secondBody.id).toBe(firstBody.id);
+      expect(secondBody.filename).toBe('updated-notes.txt');
+
+      const prisma = app.get(PrismaService);
+      const count = await prisma.meetingFile.count({ where: { meetingId } });
+      expect(count).toBe(1);
+
+      const downloadRes = await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/file/download`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(200);
+      expect(downloadRes.text).toBe(newContent);
+    });
   });
 
   describe('GET /meetings/:id/file/download', () => {

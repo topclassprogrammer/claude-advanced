@@ -78,7 +78,7 @@ src/
     meeting-file.controller.ts             — POST /meetings/:id/file (загрузка, `FileInterceptor`+diskStorage), GET /meetings/:id/file/download (скачивание, `StreamableFile`) — под `@UseGuards(JwtAuthGuard)`, доступны любому авторизованному пользователю (не только организатору встречи)
     meeting-file.constants.ts               — `MAX_FILE_SIZE_BYTES` (100 МБ), `ALLOWED_MIME_TYPES`, `STORAGE_DIR` (`apps/api/storage/meeting-files`, создаётся при загрузке модуля, в `.gitignore`)
     content-disposition.util.ts              — `buildContentDisposition(filename)` — RFC 5987/6266-заголовок для скачивания с не-ASCII (кириллица) именами файлов
-    commands/impl/upload-meeting-file.command.ts, commands/handlers/upload-meeting-file.handler.ts — проверяет существование встречи (404) и допустимость MIME-типа (400, файл с диска удаляется при отказе), сохраняет запись `MeetingFile`
+    commands/impl/upload-meeting-file.command.ts, commands/handlers/upload-meeting-file.handler.ts — проверяет существование встречи (404) и допустимость MIME-типа (400, файл с диска удаляется при отказе), сохраняет запись `MeetingFile`; повторная загрузка на ту же встречу заменяет существующую запись (`upsert` по `meetingId`) и удаляет с диска старый файл после обновления записи в БД
     queries/impl/download-meeting-file.query.ts, queries/handlers/download-meeting-file.handler.ts — находит `MeetingFile` по `meetingId` (404, если файл не загружен)
 test/
   auth.e2e-spec.ts             — e2e-тесты /auth/register и /auth/login (используют реальную БД, очищают таблицу User в beforeEach)
