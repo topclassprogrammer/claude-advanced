@@ -4,12 +4,16 @@ import { extname } from 'path';
 import {
   BadRequestException,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Post,
   Res,
   StreamableFile,
   UploadedFile,
+  UseFilters,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -18,11 +22,16 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { diskStorage } from 'multer';
 import { MeetingFile } from '../../generated/prisma/client';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import type { AuthenticatedUser } from '../auth/jwt-auth.guard';
+import { DeleteMeetingFileCommand } from './commands/impl/delete-meeting-file.command';
 import { UploadMeetingFileCommand } from './commands/impl/upload-meeting-file.command';
 import { buildContentDisposition } from './content-disposition.util';
+import { MulterExceptionFilter } from './filters/multer-exception.filter';
 import { MAX_FILE_SIZE_BYTES, STORAGE_DIR } from './meeting-file.constants';
 import { DownloadMeetingFileQuery } from './queries/impl/download-meeting-file.query';
+import { GetMeetingFileQuery } from './queries/impl/get-meeting-file.query';
 
 @UseGuards(JwtAuthGuard)
 @Controller('meetings')
@@ -33,6 +42,7 @@ export class MeetingFileController {
   ) {}
 
   @Post(':id/file')
+  @UseFilters(MulterExceptionFilter)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
@@ -57,6 +67,13 @@ export class MeetingFileController {
     );
   }
 
+  @Get(':id/file')
+  getMetadata(@Param('id') meetingId: string) {
+    return this.queryBus.execute<GetMeetingFileQuery, MeetingFile>(
+      new GetMeetingFileQuery(meetingId),
+    );
+  }
+
   @Get(':id/file/download')
   async download(
     @Param('id') meetingId: string,
@@ -71,5 +88,16 @@ export class MeetingFileController {
       'Content-Disposition': buildContentDisposition(file.filename),
     });
     return new StreamableFile(createReadStream(file.storagePath));
+  }
+
+  @Delete(':id/file')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') meetingId: string,
+  ) {
+    return this.commandBus.execute(
+      new DeleteMeetingFileCommand(meetingId, user.sub),
+    );
   }
 }
