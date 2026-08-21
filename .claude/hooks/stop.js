@@ -25,7 +25,7 @@ if (counter.count >= config.maxIterations) {
 
 // Проверяем открытые Issues
 const output = execSync(
-    `gh issue list --milestone "${config.milestone}" --state open —-json number,title`).toString();
+    `gh issue list --milestone "${config.milestone}" --state open --json number,title`).toString();
 const issues = JSON.parse(output);
 
 if (issues.length > 0) {
