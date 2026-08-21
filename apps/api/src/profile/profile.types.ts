@@ -4,6 +4,11 @@ export interface ProfileRecord {
   avatarUrl: string | null;
 }
 
+export interface AvatarFile {
+  path: string;
+  mimeType: string;
+}
+
 export function toProfileRecord(user: {
   email: string;
   name: string | null;

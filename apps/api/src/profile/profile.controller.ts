@@ -28,12 +28,12 @@ import type { AuthenticatedUser } from '../auth/jwt-auth.guard';
 import { MulterExceptionFilter } from '../meeting-file/filters/multer-exception.filter';
 import { GetProfileQuery } from './queries/impl/get-profile.query';
 import { GetAvatarFileQuery } from './queries/impl/get-avatar-file.query';
-import type { AvatarFile } from './queries/handlers/get-avatar-file.handler';
 import { UpdateProfileNameCommand } from './commands/impl/update-profile-name.command';
 import { UploadAvatarCommand } from './commands/impl/upload-avatar.command';
 import { DeleteAvatarCommand } from './commands/impl/delete-avatar.command';
 import { UpdateProfileNameDto } from './dto/update-profile-name.dto';
 import { AVATAR_STORAGE_DIR, MAX_AVATAR_SIZE_BYTES } from './profile.constants';
+import type { AvatarFile } from './profile.types';
 
 @UseGuards(JwtAuthGuard)
 @Controller('users')

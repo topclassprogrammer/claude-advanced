@@ -1,12 +1,8 @@
 import { NotFoundException } from '@nestjs/common';
 import { IQueryHandler, QueryHandler } from '@nestjs/cqrs';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { AvatarFile } from '../../profile.types';
 import { GetAvatarFileQuery } from '../impl/get-avatar-file.query';
-
-export interface AvatarFile {
-  path: string;
-  mimeType: string;
-}
 
 @QueryHandler(GetAvatarFileQuery)
 export class GetAvatarFileHandler implements IQueryHandler<
