@@ -1,25 +1,12 @@
 # apps/api
 
-Бэкенд на NestJS 11 (TypeScript). Реализован модуль пользователей (`UsersModule`) — создание и поиск пользователя, модуль авторизации (`AuthModule`) — регистрация и логин по email/паролю поверх `UsersModule`, выдача JWT, модуль встреч (`MeetingModule`) поверх `AuthModule`, защищённый JWT-гвардом, модуль файлов встречи (`MeetingFileModule`) — загрузка/скачивание файлов встречи (до 10 на встречу), файлы хранятся на локальном диске, и модуль профиля (`ProfileModule`) — просмотр (`GET /users/me`), изменение имени (`PATCH /users/me/name`), смену пароля (`PATCH /users/me/password`) и загрузку/замену/удаление/отдачу аватара (`POST`/`DELETE`/`GET /users/me/avatar`) текущего пользователя. Персистентность — PostgreSQL через Prisma ORM 7. Бизнес-логика организована по паттерну CQRS (`@nestjs/cqrs`): мутации — Command, чтения — Query. Взаимодействие между `AuthModule` и `UsersModule` идёт исключительно через `CommandBus`/`QueryBus` — `AuthModule` не обращается к `PrismaService` напрямую и не импортирует хендлеры/провайдеры `UsersModule`.
+Бэкенд на NestJS 11 (TypeScript), персистентность — PostgreSQL через Prisma ORM 7. Модули: `UsersModule`, `AuthModule` (JWT), `MeetingModule`, `MeetingFileModule`, `ProfileModule` — детали по каждому и его эндпоинтам см. в «Структуре» ниже. Бизнес-логика организована по паттерну CQRS (`@nestjs/cqrs`, см. раздел «CQRS»); межмодульное взаимодействие — только через `CommandBus`/`QueryBus`, без прямых импортов хендлеров/провайдеров другого модуля.
 
 ## Команды (запускать из этой директории или через `--workspace=api` из корня)
 
-```
-npm run start:dev          # dev-сервер с watch
-npm run start:debug         # dev-сервер с inspector
-npm run build                 # сборка в dist/
-npm run start:prod             # запуск собранного билда (node dist/main)
-npm run lint                    # eslint --fix
-npm run format                   # prettier --write
-npm run test                      # unit-тесты (jest) — подробности в разделе «Тесты»
-npm run test:watch
-npm run test:cov
-npm run test:e2e                   # e2e-тесты (jest) — требуют поднятой БД, подробности в разделе «Тесты»
-npm run prisma:generate             # сгенерировать Prisma Client
-npm run prisma:migrate:dev           # применить/создать миграцию локально
-```
+Скрипты — см. `package.json`. Про `test`/`test:e2e` — подробности в разделе «Тесты» ниже.
 
-Сервер слушает порт из `process.env.PORT` (задан в `apps/api/.env` как `3001`, чтобы не конфликтовать с dev-сервером `apps/web` на 3000), иначе по умолчанию `3000`.
+Порт — `process.env.PORT` (в `apps/api/.env` задан как `3001`, не конфликтует с `apps/web` на 3000), иначе по умолчанию `3000`.
 
 CORS включён (`app.enableCors()` в `main.ts`) для origin'а из `process.env.WEB_ORIGIN` (по умолчанию `http://localhost:3000`, задаётся в `apps/api/.env`/`.env.example`) — чтобы `apps/web` мог напрямую вызывать API из браузера.
 
@@ -51,6 +38,11 @@ src/
   prisma/
     prisma.service.ts             — PrismaClient как Nest-провайдер (connect/disconnect по хукам жизненного цикла)
     prisma.module.ts                — глобальный модуль, экспортирует PrismaService
+  users/
+    users.module.ts                   — регистрирует CqrsModule; providers = хендлеры команд/запросов (ничего не экспортирует — с модулем взаимодействуют только через CommandBus/QueryBus)
+    user.types.ts                       — интерфейс `UserRecord` (id, email, password) — тип результата хендлеров, используется и в `AuthModule`
+    commands/impl/create-user.command.ts, commands/handlers/create-user.handler.ts — создание пользователя: проверяет уникальность email (409 `ConflictException` при дубликате), хеширует пароль (bcrypt) и сохраняет через `PrismaService`
+    queries/impl/find-user-by-email.query.ts, queries/handlers/find-user-by-email.handler.ts — поиск пользователя по email через `PrismaService`, возвращает `UserRecord | null` (включая хеш пароля — нужен `AuthModule` для проверки при логине)
   auth/
     auth.module.ts                   — регистрирует CqrsModule, JwtModule (секрет/TTL из ConfigService) и импортирует UsersModule (для общего CommandBus/QueryBus в графе Nest); экспортирует JwtModule и JwtAuthGuard для использования другими модулями
     auth.controller.ts                — POST /auth/register (CommandBus), POST /auth/login (QueryBus)
@@ -61,9 +53,6 @@ src/
     commands/impl/register.command.ts, commands/handlers/register.handler.ts — регистрация: отправляет `CreateUserCommand` в `UsersModule` через `CommandBus`, затем выдаёт JWT
     queries/impl/login.query.ts, queries/handlers/login.handler.ts           — логин: отправляет `FindUserByEmailQuery` в `UsersModule` через `QueryBus`, проверяет пароль (bcrypt.compare, 401 при отсутствии пользователя или неверном пароле), затем выдаёт JWT
     dto/register.dto.ts, dto/login.dto.ts — class-validator DTO
-    
-    
-    
   meeting/
     meeting.module.ts                 — импортирует CqrsModule и AuthModule (для JwtAuthGuard)
     meeting.controller.ts               — POST /meetings, GET /meetings, GET /meetings/:id, DELETE /meetings/:id — все под `@UseGuards(JwtAuthGuard)`
@@ -88,9 +77,9 @@ src/
     profile.constants.ts                 — `MAX_AVATAR_SIZE_BYTES` (5 МБ), `ALLOWED_AVATAR_MIME_TYPES` (JPEG/PNG/WebP), `AVATAR_STORAGE_DIR` (`apps/api/storage/avatars`, создаётся при загрузке модуля, в `.gitignore`)
     profile.types.ts                     — интерфейс `ProfileRecord` (email, name, avatarUrl — `/users/me/avatar` или `null`) — тип результата хендлеров
     commands/impl/update-profile-name.command.ts, commands/handlers/update-profile-name.handler.ts — обновляет `User.name` текущего пользователя (404, если пользователь не найден)
-    commands/impl/change-password.command.ts, commands/handlers/change-password.handler.ts — сверяет `oldPassword` через `bcrypt.compare` (401 `UnauthorizedException` при несовпадении), хеширует и сохраняет `newPassword` (404, если пользователь не найден)
-    commands/impl/upload-avatar.command.ts, commands/handlers/upload-avatar.handler.ts — проверяет MIME-тип файла (400, файл с диска удаляется при отказе), сохраняет `avatarPath`/`avatarMimeType`/`avatarUploadedAt`; при замене удаляет предыдущий файл с диска
-    commands/impl/delete-avatar.command.ts, commands/handlers/delete-avatar.handler.ts — удаляет файл аватара с диска и очищает поля `avatarPath`/`avatarMimeType`/`avatarUploadedAt` в БД
+    commands/impl/change-password.command.ts, commands/handlers/change-password.handler.ts — сверяет `oldPassword` (`bcrypt.compare`, 401 при несовпадении), хеширует и сохраняет `newPassword` (404, если пользователь не найден)
+    commands/impl/upload-avatar.command.ts, commands/handlers/upload-avatar.handler.ts — проверяет MIME-тип (400, файл удаляется с диска при отказе), сохраняет `avatarPath`/`avatarMimeType`/`avatarUploadedAt`; при замене удаляет старый файл
+    commands/impl/delete-avatar.command.ts, commands/handlers/delete-avatar.handler.ts — удаляет файл аватара с диска, очищает `avatarPath`/`avatarMimeType`/`avatarUploadedAt` в БД
     queries/impl/get-profile.query.ts, queries/handlers/get-profile.handler.ts — email и имя текущего пользователя; если `User.name` не задано, вычисляет имя как часть email до `@`
     queries/impl/get-avatar-file.query.ts, queries/handlers/get-avatar-file.handler.ts — путь и MIME-тип файла аватара текущего пользователя для отдачи (404, если аватар не задан)
     dto/update-profile-name.dto.ts — class-validator DTO (name, обязательная непустая строка)
@@ -123,10 +112,7 @@ test/
   <module>.controller.ts             — инжектит CommandBus и QueryBus, по одному методу на роут
 ```
 
-Примеры из кода:
-- `RegisterCommand`/`RegisterHandler` (`auth/commands/`) — отправляет `CreateUserCommand` в `UsersModule` через `CommandBus`, затем выдаёт JWT.
-- `LoginQuery`/`LoginHandler` (`auth/queries/`) — отправляет `FindUserByEmailQuery` в `UsersModule` через `QueryBus`, проверяет пароль и не создаёт пользователя при неудаче (401).
-- `CreateMeetingCommand`/`CreateMeetingHandler`, `GetMeetingsQuery`/`GetMeetingByIdQuery` (`meeting/`) — `organizerId` командам и запросам передаётся из `@CurrentUser()` (JWT `sub`), а не из тела запроса, чтобы нельзя было создать/прочитать встречу от чужого имени.
+Конкретные Command/Query-классы и что делают их хендлеры — см. «Структуру» ниже. Общий момент: `organizerId`/`requesterId` передаются в команды и запросы из `@CurrentUser()` (JWT `sub`), а не из тела запроса, чтобы нельзя было создать/прочитать/удалить чужую сущность от чужого имени.
 
 Соглашения по CQRS:
 - Один хендлер обрабатывает ровно один Command/Query (`@CommandHandler`/`@QueryHandler` принимает один класс).
@@ -142,14 +128,11 @@ test/
 - Логин ищет пользователя и не создаёт его при отсутствии (401 Unauthorized); регистрация создаёт пользователя и возвращает 409 Conflict при дубликате email.
 - Роуты `/meetings/*` требуют заголовок `Authorization: Bearer <accessToken>` (проверяется `JwtAuthGuard` из `AuthModule`); `Meeting.organizerId` имеет `onDelete: Cascade` на связи с `User`, чтобы удаление пользователя не оставляло висящих встреч и не ломало очистку таблиц в e2e-тестах.
 - После изменения `prisma/schema.prisma` — прогонять `npm run prisma:migrate:dev` (создаёт и применяет миграцию) и `npm run prisma:generate`.
-- `MeetingFile.mimeType` проверяется по заявленному `file.mimetype` от multer (значение из `Content-Type` части multipart-запроса) против allowlist в `meeting-file.constants.ts` — это значение подделывается клиентом, полноценная проверка по magic bytes не реализована (известный gap безопасности, см. `docs/research-meeting-file-upload.md`, §1).
+- `MeetingFile.mimeType` проверяется по заявленному `file.mimetype` от multer (значение из `Content-Type` части multipart-запроса) против allowlist в `meeting-file.constants.ts` — это значение подделывается клиентом, полноценная проверка по magic bytes не реализована (известный gap безопасности). Реализуя/меняя загрузку файлов — используй @docs/research-meeting-file-upload.md (там же §1 про этот gap).
 - Авторизация на файл встречи асимметрична: загрузка/чтение метаданных/скачивание доступны любому авторизованному пользователю системы (по PRD), удаление — только организатору встречи (403 для остальных, `DeleteMeetingFileHandler` сверяет `Meeting.organizerId` с `requesterId` из JWT).
 
 ## Поддержка документации в актуальном состоянии
 
 При изменении архитектуры приложения (новые модули, изменение структуры `src/`, смена ключевых команд, добавление внешних зависимостей типа БД/очередей/кэша, изменение точки входа или конфигурации) — обновлять этот файл в том же коммите/PR, где вносится изменение. Если изменение затрагивает и корневой монорепозиторий (например, новый workspace-скрипт), обновлять также корневой `CLAUDE.md`.
-
-## Загрузка файла
-Используй @docs/research-meeting-file-upload.md для загрузки файла
 
 

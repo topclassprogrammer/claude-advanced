@@ -1,40 +1,21 @@
 # video-meetings
 
-Монорепозиторий на npm workspaces с двумя приложениями:
+An npm workspaces monorepo with two applications:
 
-- `apps/web` — фронтенд на Next.js (React 19). См. `apps/web/CLAUDE.md`.
-- `apps/api` — бэкенд на NestJS. См. `apps/api/CLAUDE.md`.
+- `apps/web` — frontend on Next.js (React 19). See `apps/web/CLAUDE.md`.
+- `apps/api` — backend on NestJS. See `apps/api/CLAUDE.md`.
 
-В `apps/api` реализован модуль авторизации (регистрация/логин, JWT), модуль встреч (создание, список) и модуль файлов встречи (загрузка/скачивание/метаданные/удаление) поверх PostgreSQL — подробности в `apps/api/CLAUDE.md`. В `apps/web` реализованы страницы входа (`/auth/login`), регистрации (`/auth/register`), главная страница (`/`) со списком встреч текущего пользователя и страница встречи (`/meetings/[id]`) с карточкой прикреплённого файла — подробности в `apps/web/CLAUDE.md`.
+`apps/api` implements an auth module (register/login, JWT), a meetings module (create, list) and a meeting files module (upload/download/metadata/delete) on top of PostgreSQL — details in `apps/api/CLAUDE.md`. `apps/web` implements login (`/auth/login`) and registration (`/auth/register`) pages, a home page (`/`) with the current user's meeting list, and a meeting page (`/meetings/[id]`) with an attached-file card — details in `apps/web/CLAUDE.md`.
 
-## Порты
+## Ports and database
 
-`apps/web` (Next.js dev-сервер) слушает **3000**, `apps/api` (NestJS) — **3001** (задаётся через `PORT` в `apps/api/.env`, см. `apps/api/.env.example`). Порты разведены, чтобы оба приложения можно было запускать одновременно.
+`apps/web` listens on **3000**, `apps/api` on **3001**. PostgreSQL (`docker compose up -d` from the root) uses host port **5433**. Details and rationale for the ports — in `apps/api/CLAUDE.md`.
 
-## База данных
+## Commands from the root
 
-PostgreSQL для локальной разработки поднимается через корневой `docker-compose.yml` (`docker compose up -d`), хост-порт **5433** (не 5432 — во избежание конфликта с локально установленным PostgreSQL). Подключение из `apps/api` настраивается через `apps/api/.env` (см. `apps/api/.env.example`).
+Scripts — see `package.json`. Each proxies the command to the relevant workspace via `npm run <script> --workspace=<name>`.
 
-## Команды из корня
-
-Скрипты в корневом `package.json` проксируют команды в отдельные workspace'ы через `npm run <script> --workspace=<name>`:
-
-```
-npm run dev:web       # запустить Next.js dev-сервер
-npm run dev:api       # запустить NestJS в watch-режиме
-npm run build         # собрать оба приложения
-npm run build:web
-npm run build:api
-npm run lint          # линт обоих приложений
-npm run lint:web
-npm run lint:api
-npm run format        # форматирование обоих приложений
-npm run format:web
-npm run format:api
-npm run test:e2e:web  # Playwright e2e-тесты apps/web (требует apps/api + БД запущенными)
-```
-
-## Структура
+## Structure
 
 ```
 apps/
@@ -42,13 +23,25 @@ apps/
   api/   — NestJS, TypeScript, Jest (unit + e2e), ESLint, Prettier
 ```
 
-## Соглашения
+## Conventions
 
-- Каждый workspace устанавливает и линтует зависимости независимо (`npm install` из корня разрешит оба через workspaces).
-- Перед коммитом запускать `lint` и `format` для затронутого приложения.
-- Тесты API: `npm run test --workspace=api` (unit), `npm run test:e2e --workspace=api` (e2e). Для e2e нужна поднятая БД (`docker compose up -d`) — подробности в `apps/api/CLAUDE.md`, раздел «Тесты».
-- Тесты web: `npm run test:e2e --workspace=web` (Playwright). Требует запущенных `apps/api` и БД (`docker compose up -d`) — тестовые данные готовятся напрямую через API, в обход UI. Подробности в `apps/web/CLAUDE.md`.
+- Each workspace installs and lints its dependencies independently (`npm install` from the root resolves both via workspaces).
+- Run `lint` and `format` for the affected app before committing.
+- API tests: `npm run test:api` (unit), `npm run test:e2e:api` (e2e, requires the DB) — details in `apps/api/CLAUDE.md`, section "Tests".
+- Web tests: `npm run test:e2e:web` (Playwright, requires `apps/api` + the DB; web has no unit tests) — details in `apps/web/CLAUDE.md`.
 
-## Поддержка документации в актуальном состоянии
+## Token economy
 
-При изменении архитектуры проекта (появление новых приложений/сервисов в `apps/`, изменение состава workspace'ов, смена ключевых команд сборки/запуска, добавление общих пакетов или иной способ взаимодействия между `web` и `api`) — обновлять этот файл вместе с изменением кода, в рамках того же коммита/PR. Аналогично обновлять `apps/web/CLAUDE.md` и `apps/api/CLAUDE.md` при архитектурных изменениях внутри соответствующего приложения. Не оставлять документацию описывающей устаревшее состояние проекта.
+Use trimmed-down command output by default, so as not to clutter the context:
+
+- `git diff --unified=0` instead of full diff context.
+- `git log --oneline -10` instead of full history with commit bodies.
+- `gh issue list --json number,title` (and similarly `gh pr list`) instead of the default formatted output.
+- `npm run <script> -- --silent` (or the relevant runner's flag) for tests — don't print extra progress output unless it's needed for diagnostics.
+- `npx tsc --noEmit 2>&1 | tail -5` — for type checking, only the fact of an error and its location matter, not the full compiler output.
+
+If full output is needed for diagnostics (e.g. a test failed and a stack trace is needed) — widen the output deliberately, not by default.
+
+## Keeping documentation up to date
+
+When the project architecture changes (new apps/services under `apps/`, changes to the set of workspaces, changes to key build/run commands, new shared packages, or a different way for `web` and `api` to interact) — update this file together with the code change, in the same commit/PR. Likewise update `apps/web/CLAUDE.md` and `apps/api/CLAUDE.md` for architectural changes within the respective app. Do not leave documentation describing an outdated state of the project.

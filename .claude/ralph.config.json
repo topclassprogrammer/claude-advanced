@@ -1,5 +1,5 @@
 {
-  "active": true,
+  "active": false,
   "milestone": "Фаза 2: Backend — аватар (загрузка, удаление)",
   "maxIterations": 10,
   "maxTurns": 50,
