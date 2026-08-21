@@ -4,6 +4,8 @@ import { IsNotEmpty, IsString } from 'class-validator';
 export class UpdateProfileNameDto {
   @IsString()
   @IsNotEmpty()
-  @Transform(({ value }: { value: string }) => value?.trim())
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   name: string;
 }
