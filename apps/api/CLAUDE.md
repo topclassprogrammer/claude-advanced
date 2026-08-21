@@ -95,7 +95,7 @@ test/
   auth.e2e-spec.ts             — e2e-тесты /auth/register и /auth/login (используют реальную БД, очищают таблицу User в beforeEach)
   meeting.e2e-spec.ts          — e2e-тесты /meetings (используют реальную БД, очищают таблицы Meeting и User в beforeEach; проверяют изоляцию встреч между пользователями)
   meeting-file.e2e-spec.ts     — e2e-тесты загрузки/списка/скачивания/удаления файлов встречи, включая лимит 10 файлов на встречу (409 на 11-й) и выборочное удаление одного файла (используют реальную БД, очищают таблицы MeetingFile, Meeting и User в beforeEach)
-  profile.e2e-spec.ts          — e2e-тесты GET /users/me и PATCH /users/me/name (используют реальную БД, очищают таблицы Meeting и User в beforeEach)
+  profile.e2e-spec.ts          — e2e-тесты GET /users/me и PATCH /users/me/name (используют реальную БД, очищают таблицы Meeting и User в beforeEach); также содержит красные (endpoints ещё не реализованы) тесты на POST/DELETE/GET /users/me/avatar и avatarUrl в ответе GET /users/me — задел под Фазу 2 (docs/plan-user-profile-page-and-editing.md)
   jest-e2e.json                 — конфиг Jest для e2e
 ```
 
