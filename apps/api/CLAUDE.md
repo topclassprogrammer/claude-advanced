@@ -86,16 +86,20 @@ src/
     queries/impl/get-meeting-files.query.ts, queries/handlers/get-meeting-files.handler.ts — список `MeetingFile` по `meetingId`, отсортированный по `uploadedAt` по убыванию (самые новые первыми); пустой список, если файлов нет
   profile/
     profile.module.ts                 — импортирует CqrsModule и AuthModule (для JwtAuthGuard)
-    profile.controller.ts               — GET /users/me, PATCH /users/me/name — под `@UseGuards(JwtAuthGuard)`
-    profile.types.ts                     — интерфейс `ProfileRecord` (email, name) — тип результата хендлеров
+    profile.controller.ts               — GET /users/me, PATCH /users/me/name, POST /users/me/avatar (загрузка/замена, `FileInterceptor('avatar')`), DELETE /users/me/avatar, GET /users/me/avatar (отдача файла, `StreamableFile`) — все под `@UseGuards(JwtAuthGuard)`; загрузка переиспользует `MulterExceptionFilter` из `meeting-file/filters` (413 при превышении `MAX_AVATAR_SIZE_BYTES`)
+    profile.constants.ts                 — `MAX_AVATAR_SIZE_BYTES` (5 МБ), `ALLOWED_AVATAR_MIME_TYPES` (JPEG/PNG/WebP), `AVATAR_STORAGE_DIR` (`apps/api/storage/avatars`, создаётся при загрузке модуля, в `.gitignore`)
+    profile.types.ts                     — интерфейс `ProfileRecord` (email, name, avatarUrl — `/users/me/avatar` или `null`) — тип результата хендлеров
     commands/impl/update-profile-name.command.ts, commands/handlers/update-profile-name.handler.ts — обновляет `User.name` текущего пользователя (404, если пользователь не найден)
+    commands/impl/upload-avatar.command.ts, commands/handlers/upload-avatar.handler.ts — проверяет MIME-тип файла (400, файл с диска удаляется при отказе), сохраняет `avatarPath`/`avatarMimeType`/`avatarUploadedAt`; при замене удаляет предыдущий файл с диска
+    commands/impl/delete-avatar.command.ts, commands/handlers/delete-avatar.handler.ts — удаляет файл аватара с диска и очищает поля `avatarPath`/`avatarMimeType`/`avatarUploadedAt` в БД
     queries/impl/get-profile.query.ts, queries/handlers/get-profile.handler.ts — email и имя текущего пользователя; если `User.name` не задано, вычисляет имя как часть email до `@`
+    queries/impl/get-avatar-file.query.ts, queries/handlers/get-avatar-file.handler.ts — путь и MIME-тип файла аватара текущего пользователя для отдачи (404, если аватар не задан)
     dto/update-profile-name.dto.ts — class-validator DTO (name, обязательная непустая строка)
 test/
   auth.e2e-spec.ts             — e2e-тесты /auth/register и /auth/login (используют реальную БД, очищают таблицу User в beforeEach)
   meeting.e2e-spec.ts          — e2e-тесты /meetings (используют реальную БД, очищают таблицы Meeting и User в beforeEach; проверяют изоляцию встреч между пользователями)
   meeting-file.e2e-spec.ts     — e2e-тесты загрузки/списка/скачивания/удаления файлов встречи, включая лимит 10 файлов на встречу (409 на 11-й) и выборочное удаление одного файла (используют реальную БД, очищают таблицы MeetingFile, Meeting и User в beforeEach)
-  profile.e2e-spec.ts          — e2e-тесты GET /users/me и PATCH /users/me/name (используют реальную БД, очищают таблицы Meeting и User в beforeEach); также содержит красные (endpoints ещё не реализованы) тесты на POST/DELETE/GET /users/me/avatar и avatarUrl в ответе GET /users/me — задел под Фазу 2 (docs/plan-user-profile-page-and-editing.md)
+  profile.e2e-spec.ts          — e2e-тесты GET /users/me, PATCH /users/me/name и загрузки/замены/удаления/отдачи аватара (POST/DELETE/GET /users/me/avatar, включая отклонение недопустимого MIME-типа и файла > 5 МБ, замену с удалением старого файла с диска, `avatarUrl` в ответе `GET /users/me`) — используют реальную БД, очищают таблицы Meeting и User в beforeEach
   jest-e2e.json                 — конфиг Jest для e2e
 ```
 
