@@ -38,7 +38,13 @@ if (issues.length > 0) {
     );
 
     const prompt = config.prompt.replace('{milestone}', config.milestone).replace('{branch}', config.branch);
-    execSync(`claude -p "${prompt}" --max-turns ${config.maxTurns}`, {stdio: 'inherit'});
+    try {
+        execSync(`claude -p "${prompt}" --max-turns ${config.maxTurns}`, {stdio: 'inherit'});
+    } catch (e) {
+        console.error(`Итерация ${counter.count} упала с ошибкой, останавливаем Ralph:`, e.message);
+        fs.writeFileSync(counterFile, JSON.stringify({ count: 0 }));
+        process.exit(1);
+    }
 } else {
     // Milestone закрыт - сбрасываем счетчик и создаем PR
 

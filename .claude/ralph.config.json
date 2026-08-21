@@ -1,8 +1,8 @@
 {
-  "active": true,
-  "milestone": "Фаза 1: Backend - схема данных и профиль (просмотр + имя, tracer bullet)",
-  "maxIterations": 1,
+  "active": false,
+  "milestone": "Фаза 2: Backend - аватар (загрузка, удаление)",
+  "maxIterations": 10,
   "maxTurns": 50,
-  "branch": "feature/phase-6",
+  "branch": "feature/phase-7",
   "prompt": "Прочитай .claude/ralph.md и следуй правилам оттуда. Возьми следующую открытую Issue из milestone '{milestone}' и реализуй его в '{branch}'"
 }
