@@ -1,6 +1,8 @@
 # apps/web
 
-Фронтенд на Next.js 16 (App Router) + React 19 + TypeScript. Реализованы страницы регистрации (`src/app/auth/register/page.tsx`, маршрут `/auth/register`) и входа (`src/app/auth/login/page.tsx`, маршрут `/auth/login`), подключённые к `POST /auth/register` и `POST /auth/login` в `apps/api`; страницы ссылаются друг на друга. Главная страница `src/app/page.tsx` (маршрут `/`) доступна только авторизованным пользователям: содержимое (лого + email + кнопка «Создать встречу» + кнопка «Выйти», секции со встречами) выровнено по центру в колонке `max-w-2xl`. Показывает список встреч текущего пользователя, подключённый к `GET /meetings`: секция «Последние встречи» (3 самые новые по `createdAt`, подсвечены `bg-accent-soft`), секция «Предстоящие встречи» (дата ≥ текущей) и секция «Прошедшие встречи» (дата в прошлом, с формой загрузки файла на каждой строке) — каждая внутри одной `Card` со строками-встречами (заголовок, дата с иконкой `IconCalendar`, описание, если есть, участники с иконкой `UsersIcon`, кнопка «Удалить встречу»).
+Фронтенд на Next.js 16 (App Router) + React 19 + TypeScript. Реализованы страницы регистрации (`src/app/auth/register/page.tsx`, маршрут `/auth/register`) и входа (`src/app/auth/login/page.tsx`, маршрут `/auth/login`), подключённые к `POST /auth/register` и `POST /auth/login` в `apps/api`; страницы ссылаются друг на друга. Главная страница `src/app/page.tsx` (маршрут `/`) доступна только авторизованным пользователям: содержимое (лого + email + аватар/имя со ссылкой на `/profile` + кнопка «Создать встречу» + кнопка «Выйти», секции со встречами) выровнено по центру в колонке `max-w-2xl`. Показывает список встреч текущего пользователя, подключённый к `GET /meetings`: секция «Последние встречи» (3 самые новые по `createdAt`, подсвечены `bg-accent-soft`), секция «Предстоящие встречи» (дата ≥ текущей) и секция «Прошедшие встречи» (дата в прошлом, с формой загрузки файла на каждой строке) — каждая внутри одной `Card` со строками-встречами (заголовок, дата с иконкой `IconCalendar`, описание, если есть, участники с иконкой `UsersIcon`, кнопка «Удалить встречу»).
+
+Страница профиля `src/app/profile/page.tsx` (маршрут `/profile`) защищена так же, как `/`. Показывает аватар (или заглушку — кружок с первой буквой имени, `data-testid="avatar-placeholder"`), имя (вычисляемое на бэкенде как часть email до `@`, если `User.name` не задано) и email, подключено к `GET /users/me` через `getProfile` (`src/lib/profile-api.ts`). Компонент `Avatar` (`src/components/Avatar.tsx`, переиспользуется и в шапке `/`) принимает `token`/`avatarUrl`/`name`/`size`: если `avatarUrl` задан, скачивает файл аватара через `getAvatarObjectUrl` (`GET /users/me/avatar` с `Authorization`, оборачивается в blob-URL — обычный `<img src>` не подходит, эндпоинт требует Bearer-токен, тот же паттерн, что и `downloadMeetingFile`), иначе показывает заглушку. Шапка `/` показывает `Avatar` (`size="sm"`) и имя из `GET /users/me` рядом с кнопками — ссылка на `/profile`; если профиль не удалось загрузить, шапка остаётся с email.
 
 Кнопка «Создать встречу» в шапке `/` открывает `CreateMeetingModal` (`src/components/CreateMeetingModal.tsx`) — модальное окно HeroUI (`Modal`, управляется состоянием `isOpen`/`onOpenChange`, без `Modal.Trigger` — см. примечание про кнопку-триггер ниже) с формой (`Form` + `TextField`/`TextArea`): заголовок (обязательное текстовое поле), дата и время (`<input type="datetime-local">` внутри `TextField`, обязательное), описание (необязательное `TextArea`). При отправке дата конвертируется в ISO-строку через `new Date(value).toISOString()` и уходит в `createMeeting` (`src/lib/meeting-api.ts`, `POST /meetings`); участники по умолчанию — пустой массив (форма их не запрашивает). При успехе колбэк `onCreated` добавляет встречу в список на странице, модалка закрывается и форма сбрасывается. Кнопка-триггер модалки — обычная `Button` с `onPress={() => setOpen(true)}` вне `<Modal>`, а не `Modal.Trigger`: оборачивание `Button` (уже pressable-компонента) в `Modal.Trigger` даёт вложенные `<button>` и предупреждение react-aria «PressResponder was rendered without a pressable child» — тот же паттерн управления через внешнее состояние, что и у `AlertDialog` в `FileCard`/`DeleteMeetingButton`.
 
@@ -14,7 +16,7 @@
 
 Иконка типа файла подбирается по MIME-префиксу в `src/lib/file-icon.tsx` (`getFileIcon`, используется и в `FileCard`, и в `FileUploadForm`): `video/*` → `VideoIcon`, `audio/*` → `AudioIcon`, остальное (документы) → `FileIcon`.
 
-Защита `/` и `/meetings/[id]` — клиентская: при отсутствии `accessToken` в `localStorage` страница редиректит на `/auth/login` через `next/navigation`; серверного middleware/проверки нет.
+Защита `/`, `/meetings/[id]` и `/profile` — клиентская: при отсутствии `accessToken` в `localStorage` страница редиректит на `/auth/login` через `next/navigation`; серверного middleware/проверки нет.
 
 ## UI-библиотека
 
@@ -24,7 +26,7 @@
 
 ## Обращение к API
 
-Адрес `apps/api` задаётся переменной окружения `NEXT_PUBLIC_API_URL` (см. `.env.example`, локально — `.env.local`, по умолчанию `http://localhost:3001`). Клиенты — тонкие обёртки над `fetch`, кидающие `ApiError` с сообщением из ответа API при ошибке: `src/lib/auth-api.ts` (`/auth/register`, `/auth/login`), `src/lib/meeting-api.ts` (`GET /meetings`, `GET /meetings/:id`) и `src/lib/meeting-file-api.ts` (`getMeetingFiles` — список файлов встречи через `GET /meetings/:id/files`, всегда 200 (пустой массив, если файлов нет); `downloadMeetingFile` — скачивание конкретного файла через `GET /meetings/:id/files/:fileId/download`; `uploadMeetingFile` — загрузка файла через `POST /meetings/:id/files` на `XMLHttpRequest` с колбэком прогресса, единственное исключение из fetch-обёрток в этом файле; `deleteMeetingFile` — удаление конкретного файла через `DELETE /meetings/:id/files/:fileId`). Все клиенты требуют `Authorization: Bearer <accessToken>`. API должен разрешать CORS для origin'а веб-приложения (см. `WEB_ORIGIN` в `apps/api/CLAUDE.md`).
+Адрес `apps/api` задаётся переменной окружения `NEXT_PUBLIC_API_URL` (см. `.env.example`, локально — `.env.local`, по умолчанию `http://localhost:3001`). Клиенты — тонкие обёртки над `fetch`, кидающие `ApiError` с сообщением из ответа API при ошибке: `src/lib/auth-api.ts` (`/auth/register`, `/auth/login`), `src/lib/meeting-api.ts` (`GET /meetings`, `GET /meetings/:id`), `src/lib/meeting-file-api.ts` (`getMeetingFiles` — список файлов встречи через `GET /meetings/:id/files`, всегда 200 (пустой массив, если файлов нет); `downloadMeetingFile` — скачивание конкретного файла через `GET /meetings/:id/files/:fileId/download`; `uploadMeetingFile` — загрузка файла через `POST /meetings/:id/files` на `XMLHttpRequest` с колбэком прогресса, единственное исключение из fetch-обёрток в этом файле; `deleteMeetingFile` — удаление конкретного файла через `DELETE /meetings/:id/files/:fileId`) и `src/lib/profile-api.ts` (`getProfile` — профиль текущего пользователя через `GET /users/me`; `getAvatarObjectUrl` — скачивает файл аватара через `GET /users/me/avatar` и возвращает blob object URL для `<img>`). Все клиенты требуют `Authorization: Bearer <accessToken>`. API должен разрешать CORS для origin'а веб-приложения (см. `WEB_ORIGIN` в `apps/api/CLAUDE.md`).
 
 Токен хранится в `localStorage` под ключом `accessToken`; доступ к нему — только через `src/lib/session.ts` (`getAccessToken`/`setAccessToken`/`clearAccessToken`), а не напрямую. `getEmailFromToken` там же декодирует email из payload JWT (без проверки подписи) для отображения в UI — эндпоинта `/auth/me` в API нет. `getUserIdFromToken` аналогично декодирует `sub` — используется на странице встречи, чтобы определить, является ли текущий пользователь организатором (для показа кнопки «Удалить» на `FileCard`).
 
@@ -47,6 +49,8 @@ npm run test:e2e          # Playwright e2e-тесты (конфиг playwright.c
 src/app/
   layout.tsx        — корневой layout, шрифты Geist (next/font/google)
   page.tsx            — главная страница (маршрут /; список встреч текущего пользователя, требует авторизации)
+  profile/
+    page.tsx                — страница профиля (маршрут /profile; требует авторизации, показывает Avatar/имя/email через GET /users/me)
   auth/
     register/
       page.tsx              — страница регистрации (маршрут /auth/register; форма email/пароль на HeroUI, вызывает src/lib/auth-api.ts, ссылка на /auth/login)
@@ -57,6 +61,7 @@ src/app/
       page.tsx                — страница встречи (маршрут /meetings/[id]; требует авторизации, показывает заголовок встречи, FileCard и FileUploadForm)
   globals.css           — глобальные стили (+ импорты tailwindcss и @heroui/styles)
 src/components/
+  Avatar.tsx                 — аватар пользователя (или заглушка — кружок с первой буквой имени, data-testid="avatar-placeholder"); скачивает файл аватара через getAvatarObjectUrl (profile-api.ts) в blob-URL, используется на /profile и в шапке /
   BrandIcon.tsx              — иконка-лого (синий квадрат с камерой), переиспользуется в Logo.tsx и на главной странице
   Logo.tsx                  — логотип (BrandIcon + название) для страниц авторизации
   CreateMeetingModal.tsx      — модалка HeroUI создания встречи (заголовок/дата и время/описание), вызывает createMeeting (POST /meetings)
@@ -77,12 +82,14 @@ src/lib/
   meeting-file-api.ts        — клиент для GET /meetings/:id/files (список файлов, fetch), GET /meetings/:id/files/:fileId/download (скачивание через blob, fetch), POST /meetings/:id/files (загрузка через XMLHttpRequest с прогрессом) и DELETE /meetings/:id/files/:fileId (удаление, fetch)
   meeting-file-constraints.ts — MAX_FILE_SIZE_BYTES/ALLOWED_MIME_TYPES/MAX_FILE_SIZE_LABEL/MAX_FILES_PER_MEETING для клиентской валидации, зеркалит одноимённые константы apps/api/src/meeting-file/meeting-file.constants.ts (синхронизируются вручную)
   file-icon.tsx               — getFileIcon(mimeType, props) — подбирает SVG-иконку файла по MIME-префиксу
+  profile-api.ts              — fetch-клиент для GET /users/me (getProfile) и GET /users/me/avatar (getAvatarObjectUrl, blob-URL)
   session.ts                 — хранение accessToken в localStorage, декодирование email/userId из JWT
 public/                    — статические ассеты (svg-иконки)
 e2e/
   meeting-create-delete.spec.ts — Playwright e2e-тесты создания встречи через модалку (заголовок/дата/описание) и удаления встречи через диалог подтверждения (включая отмену)
   meeting-file.spec.ts        — Playwright e2e-тесты файлов встречи: карточка файла и пустое состояние, форма загрузки (прогресс, добавление второго файла без замены, лимит 10 файлов, отклонение недопустимого типа/размера), удаление (организатор через диалог подтверждения, выборочное удаление одного файла из нескольких, отмена диалога, кнопка недоступна не-организатору), сквозной сценарий загрузка → отображение → скачивание → удаление
-  helpers/api.ts                — хелперы для подготовки данных теста напрямую через API apps/api (registerUser/createMeeting/uploadMeetingFile/getMeeting)
+  profile.spec.ts             — Playwright e2e-тесты страницы профиля: дефолтное имя (часть email до @) и заглушка аватара без данных профиля, отображение имени/аватара (заданных через API-хелперы) на /profile и в шапке главной страницы
+  helpers/api.ts                — хелперы для подготовки данных теста напрямую через API apps/api (registerUser/createMeeting/uploadMeetingFile/getMeeting/updateProfileName/uploadAvatar)
 playwright.config.ts       — конфиг Playwright (testDir e2e/, webServer поднимает next dev на localhost:3000)
 postcss.config.mjs         — PostCSS-конфиг с плагином @tailwindcss/postcss
 .env.example               — пример переменных окружения (NEXT_PUBLIC_API_URL)

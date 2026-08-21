@@ -26,7 +26,9 @@ test('shows default name derived from email and avatar placeholder when profile 
 
   await page.goto('/profile');
 
-  await expect(page.getByText(email.split('@')[0])).toBeVisible();
+  await expect(
+    page.getByText(email.split('@')[0], { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText(email)).toBeVisible();
   await expect(page.getByTestId('avatar-placeholder')).toBeVisible();
 });

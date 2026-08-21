@@ -78,7 +78,11 @@ export async function uploadAvatar(
   mimeType: string,
 ): Promise<void> {
   const form = new FormData();
-  form.append('avatar', new Blob([content], { type: mimeType }), filename);
+  form.append(
+    'avatar',
+    new Blob([new Uint8Array(content)], { type: mimeType }),
+    filename,
+  );
 
   const res = await fetch(`${API_URL}/users/me/avatar`, {
     method: 'POST',
