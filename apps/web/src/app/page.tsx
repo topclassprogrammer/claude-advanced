@@ -12,6 +12,7 @@ import {
 } from '@heroui/react';
 import { ApiError } from '@/lib/auth-api';
 import { getMeetings, type Meeting } from '@/lib/meeting-api';
+import { getProfile, type Profile } from '@/lib/profile-api';
 import {
   deleteMeetingFile,
   downloadMeetingFile,
@@ -24,6 +25,8 @@ import {
   getEmailFromToken,
   getUserIdFromToken,
 } from '@/lib/session';
+import Link from 'next/link';
+import { Avatar } from '@/components/Avatar';
 import { BrandIcon } from '@/components/BrandIcon';
 import { CreateMeetingModal } from '@/components/CreateMeetingModal';
 import { DeleteMeetingButton } from '@/components/DeleteMeetingButton';
@@ -161,6 +164,7 @@ export default function HomePage() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [meetings, setMeetings] = useState<Meeting[] | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now] = useState<number>(() => Date.now());
 
@@ -192,6 +196,16 @@ export default function HomePage() {
             ? err.message
             : 'Не удалось связаться с сервером. Попробуйте ещё раз.',
         );
+      });
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+
+    getProfile(session.token)
+      .then(setProfile)
+      .catch(() => {
+        // Шапка остаётся с email, если профиль не удалось загрузить.
       });
   }, [session]);
 
@@ -250,7 +264,21 @@ export default function HomePage() {
               <p className="text-sm text-muted">{session.email}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/profile"
+              className="flex items-center gap-2 rounded-full p-1 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              <Avatar
+                token={session.token}
+                avatarUrl={profile?.avatarUrl ?? null}
+                name={profile?.name ?? session.email ?? '?'}
+                size="sm"
+              />
+              <span className="text-sm font-medium text-foreground">
+                {profile?.name}
+              </span>
+            </Link>
             <CreateMeetingModal
               token={session.token}
               onCreated={onMeetingCreated}

@@ -52,6 +52,50 @@ export async function getMeeting(
   return res.json();
 }
 
+export async function updateProfileName(
+  token: string,
+  name: string,
+): Promise<void> {
+  const res = await fetch(`${API_URL}/users/me/name`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    throw new Error(
+      `Failed to update profile name: ${res.status} ${await res.text()}`,
+    );
+  }
+}
+
+export async function uploadAvatar(
+  token: string,
+  filename: string,
+  content: Buffer,
+  mimeType: string,
+): Promise<void> {
+  const form = new FormData();
+  form.append(
+    'avatar',
+    new Blob([new Uint8Array(content)], { type: mimeType }),
+    filename,
+  );
+
+  const res = await fetch(`${API_URL}/users/me/avatar`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  if (!res.ok) {
+    throw new Error(
+      `Failed to upload avatar: ${res.status} ${await res.text()}`,
+    );
+  }
+}
+
 export async function uploadMeetingFile(
   token: string,
   meetingId: string,
