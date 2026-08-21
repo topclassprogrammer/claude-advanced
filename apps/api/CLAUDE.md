@@ -1,6 +1,6 @@
 # apps/api
 
-Бэкенд на NestJS 11 (TypeScript). Реализован модуль пользователей (`UsersModule`) — создание и поиск пользователя, модуль авторизации (`AuthModule`) — регистрация и логин по email/паролю поверх `UsersModule`, выдача JWT, модуль встреч (`MeetingModule`) поверх `AuthModule`, защищённый JWT-гвардом, и модуль файлов встречи (`MeetingFileModule`) — загрузка/скачивание файлов встречи (до 10 на встречу), файлы хранятся на локальном диске. Персистентность — PostgreSQL через Prisma ORM 7. Бизнес-логика организована по паттерну CQRS (`@nestjs/cqrs`): мутации — Command, чтения — Query. Взаимодействие между `AuthModule` и `UsersModule` идёт исключительно через `CommandBus`/`QueryBus` — `AuthModule` не обращается к `PrismaService` напрямую и не импортирует хендлеры/провайдеры `UsersModule`.
+Бэкенд на NestJS 11 (TypeScript). Реализован модуль пользователей (`UsersModule`) — создание и поиск пользователя, модуль авторизации (`AuthModule`) — регистрация и логин по email/паролю поверх `UsersModule`, выдача JWT, модуль встреч (`MeetingModule`) поверх `AuthModule`, защищённый JWT-гвардом, модуль файлов встречи (`MeetingFileModule`) — загрузка/скачивание файлов встречи (до 10 на встречу), файлы хранятся на локальном диске, и модуль профиля (`ProfileModule`) — просмотр (`GET /users/me`) и изменение имени (`PATCH /users/me/name`) текущего пользователя. Персистентность — PostgreSQL через Prisma ORM 7. Бизнес-логика организована по паттерну CQRS (`@nestjs/cqrs`): мутации — Command, чтения — Query. Взаимодействие между `AuthModule` и `UsersModule` идёт исключительно через `CommandBus`/`QueryBus` — `AuthModule` не обращается к `PrismaService` напрямую и не импортирует хендлеры/провайдеры `UsersModule`.
 
 ## Команды (запускать из этой директории или через `--workspace=api` из корня)
 
@@ -84,10 +84,18 @@ src/
     commands/impl/delete-meeting-file.command.ts, commands/handlers/delete-meeting-file.handler.ts — удаляет один файл встречи по `fileId`: 404, если встреча не найдена или файл не найден/принадлежит другой встрече; 403, если запрашивающий не организатор встречи; удаляет запись в БД и файл с диска
     queries/impl/download-meeting-file.query.ts, queries/handlers/download-meeting-file.handler.ts — находит `MeetingFile` по `fileId` (404, если не найден или `meetingId` не совпадает), для скачивания
     queries/impl/get-meeting-files.query.ts, queries/handlers/get-meeting-files.handler.ts — список `MeetingFile` по `meetingId`, отсортированный по `uploadedAt` по убыванию (самые новые первыми); пустой список, если файлов нет
+  profile/
+    profile.module.ts                 — импортирует CqrsModule и AuthModule (для JwtAuthGuard)
+    profile.controller.ts               — GET /users/me, PATCH /users/me/name — под `@UseGuards(JwtAuthGuard)`
+    profile.types.ts                     — интерфейс `ProfileRecord` (email, name) — тип результата хендлеров
+    commands/impl/update-profile-name.command.ts, commands/handlers/update-profile-name.handler.ts — обновляет `User.name` текущего пользователя (404, если пользователь не найден)
+    queries/impl/get-profile.query.ts, queries/handlers/get-profile.handler.ts — email и имя текущего пользователя; если `User.name` не задано, вычисляет имя как часть email до `@`
+    dto/update-profile-name.dto.ts — class-validator DTO (name, обязательная непустая строка)
 test/
   auth.e2e-spec.ts             — e2e-тесты /auth/register и /auth/login (используют реальную БД, очищают таблицу User в beforeEach)
   meeting.e2e-spec.ts          — e2e-тесты /meetings (используют реальную БД, очищают таблицы Meeting и User в beforeEach; проверяют изоляцию встреч между пользователями)
   meeting-file.e2e-spec.ts     — e2e-тесты загрузки/списка/скачивания/удаления файлов встречи, включая лимит 10 файлов на встречу (409 на 11-й) и выборочное удаление одного файла (используют реальную БД, очищают таблицы MeetingFile, Meeting и User в beforeEach)
+  profile.e2e-spec.ts          — e2e-тесты GET /users/me и PATCH /users/me/name (используют реальную БД, очищают таблицы Meeting и User в beforeEach)
   jest-e2e.json                 — конфиг Jest для e2e
 ```
 

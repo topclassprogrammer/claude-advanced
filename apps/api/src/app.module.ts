@@ -5,6 +5,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { MeetingModule } from './meeting/meeting.module';
 import { MeetingFileModule } from './meeting-file/meeting-file.module';
+import { ProfileModule } from './profile/profile.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { MeetingFileModule } from './meeting-file/meeting-file.module';
     AuthModule,
     MeetingModule,
     MeetingFileModule,
+    ProfileModule,
   ],
   providers: [
     {
