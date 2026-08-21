@@ -46,11 +46,19 @@ if (issues.length > 0) {
         process.exit(1);
     }
 } else {
-    // Milestone закрыт - сбрасываем счетчик и создаем PR
+    // Milestone закрыт - отключаем Ralph, сбрасываем счетчик и создаем PR
+    fs.writeFileSync(counterFile, JSON.stringify({ count: 0 }));
+    config.active = false;
+    fs.writeFileSync('.claude/ralph.config.json', JSON.stringify(config, null, 2));
 
-    console.log('Запускаем финальное ревью и PR через Opus 4.7...');
-    execSync(
-        `claude -p "Сделай PR в main и затем проведи детальное code review PR. Проверь архитектуру, безопасность, производительность и соответствие PRD. Оставь комментарии прямо в PR через gh cli." --model claude-opus-4-7`,
-        {stdio: 'inherit'}
-    );
+    console.log('Milestone завершён. Запускаем финальное ревью и PR через Opus 4.7...');
+    try {
+        execSync(
+            `claude -p "Сделай PR в main и затем проведи детальное code review PR. Проверь архитектуру, безопасность, производительность и соответствие PRD. Оставь комментарии прямо в PR через gh cli." --model claude-opus-4-7`,
+            {stdio: 'inherit'}
+        );
+    } catch (e) {
+        console.error('Финальное ревью упало с ошибкой:', e.message);
+        process.exit(1);
+    }
 }

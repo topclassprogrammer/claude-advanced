@@ -1,6 +1,6 @@
 {
   "active": false,
-  "milestone": "Фаза 2: Backend - аватар (загрузка, удаление)",
+  "milestone": "Фаза 2: Backend — аватар (загрузка, удаление)",
   "maxIterations": 10,
   "maxTurns": 50,
   "branch": "feature/phase-7",
