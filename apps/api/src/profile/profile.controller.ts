@@ -31,7 +31,9 @@ import { GetAvatarFileQuery } from './queries/impl/get-avatar-file.query';
 import { UpdateProfileNameCommand } from './commands/impl/update-profile-name.command';
 import { UploadAvatarCommand } from './commands/impl/upload-avatar.command';
 import { DeleteAvatarCommand } from './commands/impl/delete-avatar.command';
+import { ChangePasswordCommand } from './commands/impl/change-password.command';
 import { UpdateProfileNameDto } from './dto/update-profile-name.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { AVATAR_STORAGE_DIR, MAX_AVATAR_SIZE_BYTES } from './profile.constants';
 import type { AvatarFile } from './profile.types';
 
@@ -55,6 +57,16 @@ export class ProfileController {
   ) {
     return this.commandBus.execute(
       new UpdateProfileNameCommand(user.sub, dto.name),
+    );
+  }
+
+  @Patch('me/password')
+  changePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    return this.commandBus.execute(
+      new ChangePasswordCommand(user.sub, dto.oldPassword, dto.newPassword),
     );
   }
 

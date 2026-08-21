@@ -256,6 +256,62 @@ describe('Profile (e2e)', () => {
     });
   });
 
+  describe('PATCH /users/me/password', () => {
+    it('changes the password and allows logging in with the new one', async () => {
+      await request(app.getHttpServer())
+        .patch('/users/me/password')
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ oldPassword: user.password, newPassword: 'new-password123' })
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: user.email, password: 'new-password123' })
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: user.email, password: user.password })
+        .expect(401);
+    });
+
+    it('rejects the change when the old password is incorrect', async () => {
+      await request(app.getHttpServer())
+        .patch('/users/me/password')
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ oldPassword: 'wrong-password', newPassword: 'new-password123' })
+        .expect(401);
+
+      await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: user.email, password: user.password })
+        .expect(200);
+    });
+
+    it('returns 400 when the new password is empty', async () => {
+      await request(app.getHttpServer())
+        .patch('/users/me/password')
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ oldPassword: user.password, newPassword: '' })
+        .expect(400);
+    });
+
+    it('returns 400 when the new password is too short', async () => {
+      await request(app.getHttpServer())
+        .patch('/users/me/password')
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ oldPassword: user.password, newPassword: '123' })
+        .expect(400);
+    });
+
+    it('returns 401 when no auth token is provided', async () => {
+      await request(app.getHttpServer())
+        .patch('/users/me/password')
+        .send({ oldPassword: user.password, newPassword: 'new-password123' })
+        .expect(401);
+    });
+  });
+
   describe('GET /users/me/avatar', () => {
     it('serves the uploaded avatar bytes with a matching content type', async () => {
       await uploadAvatar(
