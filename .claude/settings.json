@@ -2,7 +2,8 @@
   "enabledMcpjsonServers": ["playwright"],
   "permissions": {
     "allow": [
-    "Edit(apps/api/**)",
+    "Edit(*)",
+    "Write(*)",
     "Bash(npm run test)",
     "Bash(npm run test:e2e)",
     "Bash(git *)",

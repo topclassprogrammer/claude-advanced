@@ -34,19 +34,17 @@ if (issues.length > 0) {
     fs.writeFileSync(counterFile, JSON.stringify(counter));
 
     const next = issues[0];
-    console.log(`Итерация ${counter.count}/${config.maxIterations} - Issue #${next.number}`);
-    const prompt = config.prompt.replace('{milestone}', config.milestone);
+    console.log(`Итерация ${counter.count}/${config.maxIterations} - Issue #${next.number}: ${next.title}`
+    );
+
+    const prompt = config.prompt.replace('{milestone}', config.milestone).replace('{branch}', config.branch);
     execSync(`claude -p "${prompt}" --max-turns ${config.maxTurns}`, {stdio: 'inherit'});
 } else {
     // Milestone закрыт - сбрасываем счетчик и создаем PR
-    console.log(`Milestone завершён. Создаём PR.`);
-    fs.writeFileSync(counterFile, JSON.stringify({ count: 0 }));
-    const prUrl = execSync(
-        `gh pr create —-title "feat: ${config.milestone}" --body "Closes all issues in milestone: ${config.milestone}" --base main --head ${config.branch}`
-        ).toString().trim();
-    console.log('Запускаем финальное ревью через Opus 4.7...');
+
+    console.log('Запускаем финальное ревью и PR через Opus 4.7...');
     execSync(
-        `claude -p "Сделай детальное code review PR ${prUrl}. Проверь архитектуру, безопасность, производительность и соответствие PRD. Оставь комментарии прямо в PR через gh cli." --model claude-opus-4-7`,
+        `claude -p "Сделай PR в main и затем проведи детальное code review PR. Проверь архитектуру, безопасность, производительность и соответствие PRD. Оставь комментарии прямо в PR через gh cli." --model claude-opus-4-7`,
         {stdio: 'inherit'}
     );
 }
