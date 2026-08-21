@@ -7,11 +7,13 @@ import { GetAvatarFileHandler } from './queries/handlers/get-avatar-file.handler
 import { UpdateProfileNameHandler } from './commands/handlers/update-profile-name.handler';
 import { UploadAvatarHandler } from './commands/handlers/upload-avatar.handler';
 import { DeleteAvatarHandler } from './commands/handlers/delete-avatar.handler';
+import { ChangePasswordHandler } from './commands/handlers/change-password.handler';
 
 const CommandHandlers = [
   UpdateProfileNameHandler,
   UploadAvatarHandler,
   DeleteAvatarHandler,
+  ChangePasswordHandler,
 ];
 const QueryHandlers = [GetProfileHandler, GetAvatarFileHandler];
 

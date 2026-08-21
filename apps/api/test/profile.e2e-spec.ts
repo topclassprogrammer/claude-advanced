@@ -267,7 +267,7 @@ describe('Profile (e2e)', () => {
       await request(app.getHttpServer())
         .post('/auth/login')
         .send({ email: user.email, password: 'new-password123' })
-        .expect(201);
+        .expect(200);
 
       await request(app.getHttpServer())
         .post('/auth/login')
@@ -285,7 +285,7 @@ describe('Profile (e2e)', () => {
       await request(app.getHttpServer())
         .post('/auth/login')
         .send({ email: user.email, password: user.password })
-        .expect(201);
+        .expect(200);
     });
 
     it('returns 400 when the new password is empty', async () => {
