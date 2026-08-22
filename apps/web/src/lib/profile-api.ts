@@ -102,6 +102,30 @@ export async function deleteAvatar(token: string): Promise<void> {
   }
 }
 
+/** Меняет пароль текущего пользователя. */
+export async function changePassword(
+  token: string,
+  oldPassword: string,
+  newPassword: string,
+): Promise<void> {
+  const res = await fetch(`${API_URL}/users/me/password`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ oldPassword, newPassword }),
+  });
+
+  if (!res.ok) {
+    const body: unknown = await res.json().catch(() => null);
+    throw new ApiError(
+      extractErrorMessage(body, 'Не удалось сменить пароль'),
+      res.status,
+    );
+  }
+}
+
 /**
  * Скачивает файл аватара с авторизацией и возвращает object URL для использования в <img>.
  * Эндпоинт отдачи аватара требует Bearer-токен, поэтому обычный <img src> не подходит —

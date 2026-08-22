@@ -11,6 +11,7 @@ import { Avatar } from '@/components/Avatar';
 import { AvatarUpload } from '@/components/AvatarUpload';
 import { BrandIcon } from '@/components/BrandIcon';
 import { ProfileNameForm } from '@/components/ProfileNameForm';
+import { ProfilePasswordForm } from '@/components/ProfilePasswordForm';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -140,6 +141,17 @@ export default function ProfilePage() {
                 profile={profile}
                 onChange={handleAvatarChange}
               />
+            </Card.Content>
+          </Card>
+        ) : null}
+
+        {profile ? (
+          <Card>
+            <Card.Header>
+              <Card.Title>Пароль</Card.Title>
+            </Card.Header>
+            <Card.Content>
+              <ProfilePasswordForm token={token} />
             </Card.Content>
           </Card>
         ) : null}
