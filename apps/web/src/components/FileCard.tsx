@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertDialog, Alert, Button, Card, EmptyState } from '@heroui/react';
+import { Alert, Button, Card, EmptyState } from '@heroui/react';
 import type { MeetingFile } from '@/lib/meeting-file-api';
 import { MAX_FILES_PER_MEETING } from '@/lib/meeting-file-constraints';
 import { getFileIcon } from '@/lib/file-icon';
+import { ConfirmDeleteDialog } from '@/components/common/ConfirmDeleteDialog';
 import { DownloadIcon } from '@/components/icons/DownloadIcon';
 import { TrashIcon } from '@/components/icons/TrashIcon';
 
@@ -104,34 +105,17 @@ function FileRow({
         </Alert>
       ) : null}
 
-      <AlertDialog isOpen={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialog.Backdrop>
-          <AlertDialog.Container>
-            <AlertDialog.Dialog>
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="danger" />
-                <AlertDialog.Heading>Удалить файл?</AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Body>
-                Файл «{file.filename}» будет удалён без возможности
-                восстановления.
-              </AlertDialog.Body>
-              <AlertDialog.Footer>
-                <Button slot="close" variant="outline">
-                  Отмена
-                </Button>
-                <Button
-                  slot="close"
-                  className="bg-[var(--danger)] text-[var(--danger-foreground)]"
-                  onPress={handleDelete}
-                >
-                  Удалить
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
-        </AlertDialog.Backdrop>
-      </AlertDialog>
+      <ConfirmDeleteDialog
+        isOpen={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        heading="Удалить файл?"
+        onConfirm={handleDelete}
+      >
+        <p>
+          Файл «{file.filename}» будет удалён без возможности
+          восстановления.
+        </p>
+      </ConfirmDeleteDialog>
     </div>
   );
 }

@@ -4,10 +4,10 @@
 
 Маршруты:
 
-- `/auth/register`, `/auth/login` (`src/app/auth/{register,login}/page.tsx`) — регистрация и вход, `POST /auth/register`/`POST /auth/login`, страницы ссылаются друг на друга.
-- `/` (`src/app/page.tsx`) — требует авторизации. Шапка (лого, `Avatar`+имя со ссылкой на `/profile`, «Создать встречу», «Выйти») + список встреч текущего пользователя (`GET /meetings`), разбитый на секции «Последние» (3 самые новые по `createdAt`), «Предстоящие» (дата ≥ текущей) и «Прошедшие» (дата в прошлом, с формой загрузки файла на каждой строке); каждая — `Card` со строками-встречами (заголовок, дата, описание, участники, кнопка удаления).
+- `/auth/register`, `/auth/login` (`src/app/auth/{register,login}/page.tsx`) — регистрация и вход, `POST /auth/register`/`POST /auth/login`, страницы ссылаются друг на друга. Общая обёртка (декоративный фон, лого, Card) — `AuthFormShell`, поле пароля с переключателем видимости — `PasswordField` (см. «Структуру»).
+- `/` (`src/app/page.tsx`) — требует авторизации. Тонкий компонент-контейнер: сессия — через `useSession`, группировка встреч — через `groupMeetings` (`src/lib/meeting-grouping.ts`), три секции («Последние», «Предстоящие», «Прошедшие») вынесены в `src/components/home/*Section.tsx` (см. «Структуру»). Шапка (лого, `Avatar`+имя со ссылкой на `/profile`, «Создать встречу», «Выйти») + список встреч текущего пользователя (`GET /meetings`), разбитый на секции «Последние» (3 самые новые по `createdAt`), «Предстоящие» (дата ≥ текущей) и «Прошедшие» (дата в прошлом, с формой загрузки файла на каждой строке); каждая — `Card` со строками-встречами (заголовок, дата, описание, участники, кнопка удаления).
 - `/profile` (`src/app/profile/page.tsx`) — требует авторизации. Аватар/имя/email через `GET /users/me`; форма редактирования имени (`ProfileNameForm`, `PATCH /users/me/name`) и загрузка/замена/удаление аватара (`AvatarUpload`, `POST`/`DELETE /users/me/avatar`). Смены пароля в UI пока нет, хотя API это поддерживает (`PATCH /users/me/password`, см. `apps/api/CLAUDE.md`, модуль `profile/`).
-- `/meetings/[id]` (`src/app/meetings/[id]/page.tsx`) — требует авторизации. Заголовок встречи (`GET /meetings/:id`), `FileCard` (список файлов) и `FileUploadForm` под ней.
+- `/meetings/[id]` (`src/app/meetings/[id]/page.tsx`) — требует авторизации. Сессия — через `useSession`, состояние файлов встречи (fetch/download/delete) — через `useMeetingFiles` (переиспользуется и в `PastMeetingRow` на главной странице). Заголовок встречи (`GET /meetings/:id`), `FileCard` (список файлов) и `FileUploadForm` под ней.
 
 Защита `/`, `/meetings/[id]` и `/profile` — клиентская: при отсутствии `accessToken` в `localStorage` страница редиректит на `/auth/login` через `next/navigation`; серверного middleware/проверки нет.
 
@@ -47,6 +47,18 @@ src/app/
       page.tsx                — страница встречи (маршрут /meetings/[id]; требует авторизации, показывает заголовок встречи, FileCard и FileUploadForm)
   globals.css           — глобальные стили (+ импорты tailwindcss и @heroui/styles)
 src/components/
+  common/
+    ConfirmDeleteDialog.tsx      — общий AlertDialog с подтверждением удаления (заголовок/тело/onConfirm через пропсы), переиспользуется в FileCard (FileRow), AvatarUpload и DeleteMeetingButton
+    UploadDropzone.tsx            — общая drag-and-drop зона (<label> вокруг скрытого <input type="file">), переиспользуется в FileUploadForm и AvatarUpload; состояние загрузки — из useFileUpload
+  auth/
+    AuthFormShell.tsx             — общая обёртка форм /auth/login и /auth/register: декоративный фон, Logo, Card с заголовком/описанием
+    PasswordField.tsx             — поле пароля с переключателем видимости (HeroUI TextField/InputGroup/ToggleButton), общее для обеих форм
+  home/
+    MeetingRow.tsx              — строка встречи в секциях «Последние»/«Предстоящие» на главной странице (заголовок, дата, описание, участники, кнопка удаления)
+    PastMeetingRow.tsx           — строка прошедшей встречи: то же, что MeetingRow, плюс файлы встречи через useMeetingFiles (FileCard + FileUploadForm в compact-режиме)
+    RecentMeetingsSection.tsx     — секция «Последние встречи» на главной странице (Card со списком MeetingRow), null если список пуст
+    UpcomingMeetingsSection.tsx    — секция «Предстоящие встречи» на главной странице, null если список пуст
+    PastMeetingsSection.tsx       — секция «Прошедшие встречи» на главной странице (Card со списком PastMeetingRow), null если список пуст
   Avatar.tsx                 — аватар пользователя (или заглушка — кружок с первой буквой имени, data-testid="avatar-placeholder"); принимает token/avatarUrl/name/size, используется на /profile и в шапке /. Если avatarUrl задан — скачивает файл через getAvatarObjectUrl (GET /users/me/avatar с Authorization) и оборачивает в blob-URL: обычный <img src> не подходит, т.к. эндпоинт требует Bearer-токен (тот же паттерн, что и downloadMeetingFile). GET /users/me всегда возвращает один и тот же avatarUrl ('/users/me/avatar') независимо от содержимого, поэтому Avatar сам по себе не перезапрашивает файл при замене — вызывающий код (страница профиля) форсирует перерисовку через key, меняющийся при каждой загрузке/удалении аватара
   AvatarUpload.tsx            — drag-and-drop зона (тот же паттерн, что и FileUploadForm: <label htmlFor> вокруг скрытого <input type="file">) + клиентская валидация MIME/размера (ALLOWED_AVATAR_MIME_TYPES/MAX_AVATAR_SIZE_BYTES из avatar-constraints.ts) для загрузки/замены аватара (POST /users/me/avatar) на /profile; кнопка «Удалить аватар» (видна только если аватар задан) открывает AlertDialog с подтверждением перед DELETE /users/me/avatar. Ошибка (сеть/сервер/невалидный тип-размер) — Alert под зоной, без потери состояния страницы
   ProfileNameForm.tsx          — форма редактирования имени на /profile (HeroUI Form/TextField), вызывает updateProfileName (PATCH /users/me/name), обновляет отображаемый профиль через колбэк onUpdated при успехе
@@ -64,9 +76,16 @@ src/components/
   icons/UploadIcon.tsx        — SVG-иконка загрузки (пустое состояние FileUploadForm)
   icons/DownloadIcon.tsx      — SVG-иконка скачивания (кнопка «Скачать» на FileCard)
   icons/TrashIcon.tsx         — SVG-иконка корзины (кнопки удаления файла/встречи)
+src/hooks/
+  useSession.ts               — bootstrap сессии из localStorage/JWT (редирект на /auth/login при отсутствии токена) + logout; используется на / и /meetings/[id]
+  useMeetingFiles.ts           — состояние файлов встречи (fetch с опциональным autoLoad, download/delete/uploaded-хендлеры); используется в PastMeetingRow (autoLoad) и на /meetings/[id] (файлы загружаются вместе со встречей через Promise.all, setFiles из хука)
+  useFileUpload.ts             — общее состояние drag-and-drop загрузки (isDragging/uploading/currentFile/progress/error, handleDragOver/handleDragLeave/handleDrop/handleInputChange); принимает validate/upload/onUploaded/defaultErrorMessage, используется в FileUploadForm и AvatarUpload
 src/lib/
   auth-api.ts               — fetch-клиент для /auth/* эндпоинтов apps/api (NEXT_PUBLIC_API_URL)
   meeting-api.ts             — fetch-клиент для GET /meetings, GET /meetings/:id, POST /meetings (createMeeting) и DELETE /meetings/:id (deleteMeeting)
+  meeting-grouping.ts          — groupMeetings(meetings, now) — чистая функция, делит встречи на recent/upcoming/past для главной страницы
+  format-meeting-date.ts        — formatMeetingDate(date) — форматирование даты встречи (ru-RU, Intl.DateTimeFormat), используется на / и /meetings/[id]
+  email-pattern.ts              — EMAIL_PATTERN — общее регулярное выражение валидации email для форм /auth/login и /auth/register
   meeting-file-api.ts        — клиент для GET /meetings/:id/files (список файлов, fetch), GET /meetings/:id/files/:fileId/download (скачивание через blob, fetch), POST /meetings/:id/files (загрузка через XMLHttpRequest с прогрессом) и DELETE /meetings/:id/files/:fileId (удаление, fetch)
   meeting-file-constraints.ts — MAX_FILE_SIZE_BYTES/ALLOWED_MIME_TYPES/MAX_FILE_SIZE_LABEL/MAX_FILES_PER_MEETING для клиентской валидации, зеркалит одноимённые константы apps/api/src/meeting-file/meeting-file.constants.ts (синхронизируются вручную)
   avatar-constraints.ts       — MAX_AVATAR_SIZE_BYTES/ALLOWED_AVATAR_MIME_TYPES/MAX_AVATAR_SIZE_LABEL для клиентской валидации аватара, зеркалит apps/api/src/profile/profile.constants.ts (синхронизируются вручную)

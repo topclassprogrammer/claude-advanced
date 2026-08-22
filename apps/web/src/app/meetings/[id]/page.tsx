@@ -2,59 +2,35 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { Alert, IconCalendar, Spinner } from '@heroui/react';
 import { ApiError } from '@/lib/auth-api';
 import { getMeetingById, type Meeting } from '@/lib/meeting-api';
-import {
-  deleteMeetingFile,
-  downloadMeetingFile,
-  getMeetingFiles,
-  type MeetingFile,
-} from '@/lib/meeting-file-api';
-import { getAccessToken, getUserIdFromToken } from '@/lib/session';
+import { getMeetingFiles } from '@/lib/meeting-file-api';
+import { formatMeetingDate } from '@/lib/format-meeting-date';
+import { useSession } from '@/hooks/useSession';
+import { useMeetingFiles } from '@/hooks/useMeetingFiles';
 import { FileCard } from '@/components/FileCard';
 import { FileUploadForm } from '@/components/FileUploadForm';
 import { UsersIcon } from '@/components/icons/UsersIcon';
 
-const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
-
-function formatMeetingDate(date: string): string {
-  const parsed = new Date(date);
-  return Number.isNaN(parsed.getTime()) ? date : dateFormatter.format(parsed);
-}
-
 export default function MeetingPage() {
-  const router = useRouter();
   const params = useParams<{ id: string }>();
   const meetingId = params.id;
 
-  const [token, setToken] = useState<string | null>(null);
+  const { session } = useSession();
   const [meeting, setMeeting] = useState<Meeting | null>(null);
-  const [files, setFiles] = useState<MeetingFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { files, setFiles, handleDownload, handleDelete, handleUploaded } =
+    useMeetingFiles(session?.token ?? '', meetingId);
 
   useEffect(() => {
-    const storedToken = getAccessToken();
-    if (!storedToken) {
-      router.replace('/auth/login');
-      return;
-    }
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setToken(storedToken);
-  }, [router]);
-
-  useEffect(() => {
-    if (!token) return;
+    if (!session) return;
 
     Promise.all([
-      getMeetingById(token, meetingId),
-      getMeetingFiles(token, meetingId),
+      getMeetingById(session.token, meetingId),
+      getMeetingFiles(session.token, meetingId),
     ])
       .then(([meetingResult, filesResult]) => {
         setMeeting(meetingResult);
@@ -68,9 +44,9 @@ export default function MeetingPage() {
         );
       })
       .finally(() => setLoading(false));
-  }, [token, meetingId]);
+  }, [session, meetingId, setFiles]);
 
-  if (!token || loading) {
+  if (!session || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Spinner size="lg" />
@@ -115,21 +91,16 @@ export default function MeetingPage() {
 
             <FileCard
               files={files}
-              canDelete={meeting.organizerId === getUserIdFromToken(token)}
-              onDownload={(file) =>
-                downloadMeetingFile(token, meetingId, file.id, file.filename)
-              }
-              onDelete={async (file) => {
-                await deleteMeetingFile(token, meetingId, file.id);
-                setFiles((prev) => prev.filter((f) => f.id !== file.id));
-              }}
+              canDelete={meeting.organizerId === session.userId}
+              onDownload={handleDownload}
+              onDelete={handleDelete}
             />
 
             <FileUploadForm
-              token={token}
+              token={session.token}
               meetingId={meetingId}
               filesCount={files.length}
-              onUploaded={(file) => setFiles((prev) => [file, ...prev])}
+              onUploaded={handleUploaded}
             />
           </>
         ) : null}

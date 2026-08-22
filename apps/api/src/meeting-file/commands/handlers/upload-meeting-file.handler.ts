@@ -2,6 +2,7 @@ import { unlink } from 'fs/promises';
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   NotFoundException,
 } from '@nestjs/common';
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
@@ -28,22 +29,28 @@ export class UploadMeetingFileHandler implements ICommandHandler<
       where: { id: meetingId },
     });
     if (!meeting) {
-      await unlink(file.path).catch(() => undefined);
-      throw new NotFoundException('Meeting not found');
+      await this.rejectUpload(
+        file.path,
+        new NotFoundException('Meeting not found'),
+      );
     }
 
     if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-      await unlink(file.path).catch(() => undefined);
-      throw new BadRequestException('Unsupported file type');
+      await this.rejectUpload(
+        file.path,
+        new BadRequestException('Unsupported file type'),
+      );
     }
 
     const existingCount = await this.prisma.meetingFile.count({
       where: { meetingId },
     });
     if (existingCount >= MAX_FILES_PER_MEETING) {
-      await unlink(file.path).catch(() => undefined);
-      throw new ConflictException(
-        `Meeting already has the maximum number of files (${MAX_FILES_PER_MEETING})`,
+      await this.rejectUpload(
+        file.path,
+        new ConflictException(
+          `Meeting already has the maximum number of files (${MAX_FILES_PER_MEETING})`,
+        ),
       );
     }
 
@@ -58,5 +65,14 @@ export class UploadMeetingFileHandler implements ICommandHandler<
         storagePath: file.path,
       },
     });
+  }
+
+  /** Удаляет загруженный multer-ом файл с диска перед отклонением загрузки. */
+  private async rejectUpload(
+    filePath: string,
+    exception: HttpException,
+  ): Promise<never> {
+    await unlink(filePath).catch(() => undefined);
+    throw exception;
   }
 }

@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertDialog, Alert, Button } from '@heroui/react';
+import { Alert, Button } from '@heroui/react';
 import { ApiError } from '@/lib/auth-api';
 import { deleteMeeting, type Meeting } from '@/lib/meeting-api';
+import { ConfirmDeleteDialog } from '@/components/common/ConfirmDeleteDialog';
 import { TrashIcon } from '@/components/icons/TrashIcon';
 
 /** Кнопка удаления встречи с подтверждением. Видима только организатору — бэкенд разрешает удаление только ему (403 для остальных). */
@@ -49,44 +50,25 @@ export function DeleteMeetingButton({
         <TrashIcon className="size-4 shrink-0" />
       </Button>
 
-      <AlertDialog isOpen={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialog.Backdrop>
-          <AlertDialog.Container>
-            <AlertDialog.Dialog>
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="danger" />
-                <AlertDialog.Heading>Удалить встречу?</AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Body className="flex flex-col gap-3">
-                <p>
-                  Встреча «{meeting.title}» будет удалена без возможности
-                  восстановления, вместе со всеми прикреплёнными файлами.
-                </p>
-                {error ? (
-                  <Alert status="danger">
-                    <Alert.Indicator />
-                    <Alert.Content>
-                      <Alert.Description>{error}</Alert.Description>
-                    </Alert.Content>
-                  </Alert>
-                ) : null}
-              </AlertDialog.Body>
-              <AlertDialog.Footer>
-                <Button slot="close" variant="outline">
-                  Отмена
-                </Button>
-                <Button
-                  slot="close"
-                  className="bg-[var(--danger)] text-[var(--danger-foreground)]"
-                  onPress={handleDelete}
-                >
-                  Удалить
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
-        </AlertDialog.Backdrop>
-      </AlertDialog>
+      <ConfirmDeleteDialog
+        isOpen={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        heading="Удалить встречу?"
+        onConfirm={handleDelete}
+      >
+        <p>
+          Встреча «{meeting.title}» будет удалена без возможности
+          восстановления, вместе со всеми прикреплёнными файлами.
+        </p>
+        {error ? (
+          <Alert status="danger">
+            <Alert.Indicator />
+            <Alert.Content>
+              <Alert.Description>{error}</Alert.Description>
+            </Alert.Content>
+          </Alert>
+        ) : null}
+      </ConfirmDeleteDialog>
     </>
   );
 }
