@@ -34,6 +34,74 @@ export async function getProfile(token: string): Promise<Profile> {
   return body as Profile;
 }
 
+/** Обновляет имя текущего пользователя, возвращает обновлённый профиль. */
+export async function updateProfileName(
+  token: string,
+  name: string,
+): Promise<Profile> {
+  const res = await fetch(`${API_URL}/users/me/name`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ name }),
+  });
+
+  const body: unknown = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    throw new ApiError(
+      extractErrorMessage(body, 'Не удалось обновить имя'),
+      res.status,
+    );
+  }
+
+  return body as Profile;
+}
+
+/** Загружает (или заменяет) аватар текущего пользователя, возвращает обновлённый профиль. */
+export async function uploadAvatar(
+  token: string,
+  file: File,
+): Promise<Profile> {
+  const form = new FormData();
+  form.append('avatar', file);
+
+  const res = await fetch(`${API_URL}/users/me/avatar`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+
+  const body: unknown = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    throw new ApiError(
+      extractErrorMessage(body, 'Не удалось загрузить аватар'),
+      res.status,
+    );
+  }
+
+  return body as Profile;
+}
+
+/** Удаляет аватар текущего пользователя — профиль возвращается к заглушке. */
+export async function deleteAvatar(token: string): Promise<void> {
+  const res = await fetch(`${API_URL}/users/me/avatar`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const body: unknown = await res.json().catch(() => null);
+    throw new ApiError(
+      extractErrorMessage(body, 'Не удалось удалить аватар'),
+      res.status,
+    );
+  }
+}
+
 /**
  * Скачивает файл аватара с авторизацией и возвращает object URL для использования в <img>.
  * Эндпоинт отдачи аватара требует Bearer-токен, поэтому обычный <img src> не подходит —

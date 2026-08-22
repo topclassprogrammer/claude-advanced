@@ -8,13 +8,21 @@ import { ApiError } from '@/lib/auth-api';
 import { getProfile, type Profile } from '@/lib/profile-api';
 import { getAccessToken } from '@/lib/session';
 import { Avatar } from '@/components/Avatar';
+import { AvatarUpload } from '@/components/AvatarUpload';
 import { BrandIcon } from '@/components/BrandIcon';
+import { ProfileNameForm } from '@/components/ProfileNameForm';
 
 export default function ProfilePage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [avatarVersion, setAvatarVersion] = useState(0);
+
+  const handleAvatarChange = (updated: Profile) => {
+    setProfile(updated);
+    setAvatarVersion((v) => v + 1);
+  };
 
   useEffect(() => {
     const accessToken = getAccessToken();
@@ -90,6 +98,7 @@ export default function ProfilePage() {
             </Card.Header>
             <Card.Content className="flex items-center gap-4">
               <Avatar
+                key={`${profile.avatarUrl}-${avatarVersion}`}
                 token={token}
                 avatarUrl={profile.avatarUrl}
                 name={profile.name}
@@ -101,6 +110,36 @@ export default function ProfilePage() {
                 </p>
                 <p className="text-sm text-muted">{profile.email}</p>
               </div>
+            </Card.Content>
+          </Card>
+        ) : null}
+
+        {profile ? (
+          <Card>
+            <Card.Header>
+              <Card.Title>Имя</Card.Title>
+            </Card.Header>
+            <Card.Content>
+              <ProfileNameForm
+                token={token}
+                name={profile.name}
+                onUpdated={setProfile}
+              />
+            </Card.Content>
+          </Card>
+        ) : null}
+
+        {profile ? (
+          <Card>
+            <Card.Header>
+              <Card.Title>Аватар</Card.Title>
+            </Card.Header>
+            <Card.Content>
+              <AvatarUpload
+                token={token}
+                profile={profile}
+                onChange={handleAvatarChange}
+              />
             </Card.Content>
           </Card>
         ) : null}
