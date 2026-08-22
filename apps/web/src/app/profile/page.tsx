@@ -10,6 +10,7 @@ import { getAccessToken } from '@/lib/session';
 import { Avatar } from '@/components/Avatar';
 import { AvatarUpload } from '@/components/AvatarUpload';
 import { BrandIcon } from '@/components/BrandIcon';
+import { ChangePasswordForm } from '@/components/ChangePasswordForm';
 import { ProfileNameForm } from '@/components/ProfileNameForm';
 
 export default function ProfilePage() {
@@ -140,6 +141,17 @@ export default function ProfilePage() {
                 profile={profile}
                 onChange={handleAvatarChange}
               />
+            </Card.Content>
+          </Card>
+        ) : null}
+
+        {profile ? (
+          <Card>
+            <Card.Header>
+              <Card.Title>Пароль</Card.Title>
+            </Card.Header>
+            <Card.Content>
+              <ChangePasswordForm token={token} />
             </Card.Content>
           </Card>
         ) : null}

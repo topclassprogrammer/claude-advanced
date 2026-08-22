@@ -60,6 +60,30 @@ export async function updateProfileName(
   return body as Profile;
 }
 
+/** Меняет пароль текущего пользователя. */
+export async function changePassword(
+  token: string,
+  oldPassword: string,
+  newPassword: string,
+): Promise<void> {
+  const res = await fetch(`${API_URL}/users/me/password`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ oldPassword, newPassword }),
+  });
+
+  if (!res.ok) {
+    const body: unknown = await res.json().catch(() => null);
+    throw new ApiError(
+      extractErrorMessage(body, 'Не удалось изменить пароль'),
+      res.status,
+    );
+  }
+}
+
 /** Загружает (или заменяет) аватар текущего пользователя, возвращает обновлённый профиль. */
 export async function uploadAvatar(
   token: string,
