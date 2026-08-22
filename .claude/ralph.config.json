@@ -1,8 +1,8 @@
 {
   "active": false,
-  "milestone": "Фаза 2: Backend — аватар (загрузка, удаление)",
+  "milestone": "Фаза 6: Frontend — смена пароля и сквозной e2e-сценарий",
   "maxIterations": 10,
   "maxTurns": 50,
-  "branch": "feature/phase-7",
+  "branch": "feature/phase-11",
   "prompt": "Прочитай .claude/ralph.md и следуй правилам оттуда. Возьми следующую открытую Issue из milestone '{milestone}' и реализуй его в '{branch}'"
 }
