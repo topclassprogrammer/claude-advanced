@@ -10,12 +10,10 @@ const SIZE_CLASSES = {
 } as const;
 
 export function Avatar({
-  token,
   avatarUrl,
   name,
   size = 'md',
 }: {
-  token: string;
   avatarUrl: string | null;
   name: string;
   size?: keyof typeof SIZE_CLASSES;
@@ -32,7 +30,7 @@ export function Avatar({
     let cancelled = false;
     let createdUrl: string | null = null;
 
-    getAvatarObjectUrl(token)
+    getAvatarObjectUrl()
       .then((url) => {
         if (cancelled) {
           URL.revokeObjectURL(url);
@@ -49,7 +47,7 @@ export function Avatar({
       cancelled = true;
       if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
-  }, [token, avatarUrl]);
+  }, [avatarUrl]);
 
   const sizeClass = SIZE_CLASSES[size];
 

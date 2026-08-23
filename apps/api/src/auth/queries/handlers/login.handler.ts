@@ -15,20 +15,19 @@ import { UserRecord } from '../../../users/user.types';
 const DUMMY_PASSWORD_HASH =
   '$2a$10$CwTycUXWue0Thq9StjUM0uJ8i8zBHT0oXKGCEQjqIrCNXCLGKKrpe';
 
+export interface LoginResult {
+  accessToken: string;
+  userId: string;
+}
+
 @QueryHandler(LoginQuery)
-export class LoginHandler implements IQueryHandler<
-  LoginQuery,
-  { accessToken: string }
-> {
+export class LoginHandler implements IQueryHandler<LoginQuery, LoginResult> {
   constructor(
     private readonly queryBus: QueryBus,
     private readonly authTokenService: AuthTokenService,
   ) {}
 
-  async execute({
-    email,
-    password,
-  }: LoginQuery): Promise<{ accessToken: string }> {
+  async execute({ email, password }: LoginQuery): Promise<LoginResult> {
     const user = await this.queryBus.execute<
       FindUserByEmailQuery,
       UserRecord | null
@@ -42,6 +41,7 @@ export class LoginHandler implements IQueryHandler<
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    return this.authTokenService.sign(user.id, user.email);
+    const { accessToken } = this.authTokenService.sign(user.id, user.email);
+    return { accessToken, userId: user.id };
   }
 }

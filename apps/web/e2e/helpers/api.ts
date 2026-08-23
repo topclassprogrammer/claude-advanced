@@ -1,9 +1,16 @@
 const API_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:3001';
 
+export interface RegisteredUser {
+  /** Bearer-токен для прямых вызовов apps/api из хелперов (см. jwt-auth.guard.ts fallback). */
+  accessToken: string;
+  /** Значение Set-Cookie refreshToken из ответа — сидируется в браузер через helpers/session.ts. */
+  refreshTokenCookie: string;
+}
+
 export async function registerUser(
   email: string,
   password: string,
-): Promise<string> {
+): Promise<RegisteredUser> {
   const res = await fetch(`${API_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -15,7 +22,11 @@ export async function registerUser(
     );
   }
   const body = (await res.json()) as { accessToken: string };
-  return body.accessToken;
+  const refreshTokenCookie = res.headers.get('set-cookie');
+  if (!refreshTokenCookie) {
+    throw new Error('Register response did not set a refresh token cookie');
+  }
+  return { accessToken: body.accessToken, refreshTokenCookie };
 }
 
 export async function createMeeting(

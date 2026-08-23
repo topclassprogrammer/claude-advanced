@@ -32,11 +32,9 @@ function validateAvatarFile(file: File): string | null {
  * перерисовку <Avatar> (например, через key) при изменении профиля через onChange.
  */
 export function AvatarUpload({
-  token,
   profile,
   onChange,
 }: {
-  token: string;
   profile: Profile;
   onChange: (profile: Profile) => void;
 }) {
@@ -54,7 +52,7 @@ export function AvatarUpload({
     handleInputChange,
   } = useFileUpload({
     validate: validateAvatarFile,
-    upload: (file) => uploadAvatar(token, file),
+    upload: (file) => uploadAvatar(file),
     onUploaded: onChange,
     defaultErrorMessage: 'Не удалось загрузить аватар. Попробуйте ещё раз.',
   });
@@ -63,7 +61,7 @@ export function AvatarUpload({
     setDeleting(true);
     setDeleteError(null);
     try {
-      await deleteAvatar(token);
+      await deleteAvatar();
       onChange({ ...profile, avatarUrl: null });
     } catch (err) {
       setDeleteError(

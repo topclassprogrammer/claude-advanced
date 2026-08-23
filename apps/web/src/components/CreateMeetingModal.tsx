@@ -17,10 +17,8 @@ import { ApiError } from '@/lib/auth-api';
 import { createMeeting, type Meeting } from '@/lib/meeting-api';
 
 export function CreateMeetingModal({
-  token,
   onCreated,
 }: {
-  token: string;
   onCreated: (meeting: Meeting) => void;
 }) {
   const [isOpen, setOpen] = useState(false);
@@ -45,7 +43,7 @@ export function CreateMeetingModal({
 
     setPending(true);
     try {
-      const meeting = await createMeeting(token, {
+      const meeting = await createMeeting({
         title,
         date: parsedDate.toISOString(),
         description: description || undefined,

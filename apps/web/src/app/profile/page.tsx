@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Alert, Card, Spinner } from '@heroui/react';
 import { ApiError } from '@/lib/auth-api';
 import { getProfile, type Profile } from '@/lib/profile-api';
-import { getAccessToken } from '@/lib/session';
+import { useSession } from '@/hooks/useSession';
 import { Avatar } from '@/components/Avatar';
 import { AvatarUpload } from '@/components/AvatarUpload';
 import { BrandIcon } from '@/components/BrandIcon';
@@ -14,8 +13,7 @@ import { ChangePasswordForm } from '@/components/ChangePasswordForm';
 import { ProfileNameForm } from '@/components/ProfileNameForm';
 
 export default function ProfilePage() {
-  const router = useRouter();
-  const [token, setToken] = useState<string | null>(null);
+  const { session } = useSession();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [avatarVersion, setAvatarVersion] = useState(0);
@@ -26,22 +24,9 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
-    const accessToken = getAccessToken();
-    if (!accessToken) {
-      router.replace('/auth/login');
-      return;
-    }
+    if (!session) return;
 
-    // localStorage — внешнее (browser-only) хранилище, недоступное при SSR,
-    // поэтому токен можно прочитать только на клиенте внутри эффекта.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setToken(accessToken);
-  }, [router]);
-
-  useEffect(() => {
-    if (!token) return;
-
-    getProfile(token)
+    getProfile()
       .then(setProfile)
       .catch((err) => {
         setError(
@@ -50,9 +35,9 @@ export default function ProfilePage() {
             : 'Не удалось связаться с сервером. Попробуйте ещё раз.',
         );
       });
-  }, [token]);
+  }, [session]);
 
-  if (!token) {
+  if (!session) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Spinner size="lg" />
@@ -100,7 +85,6 @@ export default function ProfilePage() {
             <Card.Content className="flex items-center gap-4">
               <Avatar
                 key={`${profile.avatarUrl}-${avatarVersion}`}
-                token={token}
                 avatarUrl={profile.avatarUrl}
                 name={profile.name}
                 size="lg"
@@ -121,11 +105,7 @@ export default function ProfilePage() {
               <Card.Title>Имя</Card.Title>
             </Card.Header>
             <Card.Content>
-              <ProfileNameForm
-                token={token}
-                name={profile.name}
-                onUpdated={setProfile}
-              />
+              <ProfileNameForm name={profile.name} onUpdated={setProfile} />
             </Card.Content>
           </Card>
         ) : null}
@@ -136,11 +116,7 @@ export default function ProfilePage() {
               <Card.Title>Аватар</Card.Title>
             </Card.Header>
             <Card.Content>
-              <AvatarUpload
-                token={token}
-                profile={profile}
-                onChange={handleAvatarChange}
-              />
+              <AvatarUpload profile={profile} onChange={handleAvatarChange} />
             </Card.Content>
           </Card>
         ) : null}
@@ -151,7 +127,7 @@ export default function ProfilePage() {
               <Card.Title>Пароль</Card.Title>
             </Card.Header>
             <Card.Content>
-              <ChangePasswordForm token={token} />
+              <ChangePasswordForm />
             </Card.Content>
           </Card>
         ) : null}

@@ -10,11 +10,9 @@ import { TrashIcon } from '@/components/icons/TrashIcon';
 /** Кнопка удаления встречи с подтверждением. Видима только организатору — бэкенд разрешает удаление только ему (403 для остальных). */
 export function DeleteMeetingButton({
   meeting,
-  token,
   onDeleted,
 }: {
   meeting: Meeting;
-  token: string;
   onDeleted: (meetingId: string) => void;
 }) {
   const [deleting, setDeleting] = useState(false);
@@ -25,7 +23,7 @@ export function DeleteMeetingButton({
     setDeleting(true);
     setError(null);
     try {
-      await deleteMeeting(token, meeting.id);
+      await deleteMeeting(meeting.id);
       onDeleted(meeting.id);
     } catch (err) {
       setError(

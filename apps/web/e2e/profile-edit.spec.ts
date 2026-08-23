@@ -3,29 +3,19 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { test, expect } from '@playwright/test';
 import { registerUser, uploadAvatar } from './helpers/api';
+import { setSessionCookie } from './helpers/session';
 
 // 1x1 transparent PNG.
 const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
-
-async function loginAs(
-  page: import('@playwright/test').Page,
-  context: import('@playwright/test').BrowserContext,
-  token: string,
-) {
-  await context.addInitScript((accessToken) => {
-    window.localStorage.setItem('accessToken', accessToken);
-  }, token);
-  void page;
-}
 
 test('editing the name via the form updates /profile and the home page header', async ({
   page,
   context,
 }) => {
   const email = `profile-edit-name-${Date.now()}@example.com`;
-  const token = await registerUser(email, 'password123');
-  await loginAs(page, context, token);
+  const { refreshTokenCookie } = await registerUser(email, 'password123');
+  await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto('/profile');
   await expect(page.getByRole('heading', { name: 'Профиль' })).toBeVisible();
@@ -46,8 +36,8 @@ test('uploading a valid avatar via drag-and-drop updates the avatar on /profile 
   context,
 }) => {
   const email = `profile-edit-avatar-${Date.now()}@example.com`;
-  const token = await registerUser(email, 'password123');
-  await loginAs(page, context, token);
+  const { refreshTokenCookie } = await registerUser(email, 'password123');
+  await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto('/profile');
   await expect(page.getByTestId('avatar-placeholder').first()).toBeVisible();
@@ -72,8 +62,8 @@ test('rejects an avatar with a disallowed file type with a clear error, without 
   context,
 }) => {
   const email = `profile-edit-avatar-invalid-type-${Date.now()}@example.com`;
-  const token = await registerUser(email, 'password123');
-  await loginAs(page, context, token);
+  const { refreshTokenCookie } = await registerUser(email, 'password123');
+  await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto('/profile');
 
@@ -93,8 +83,8 @@ test('rejects an oversized avatar with a clear error, without losing the page', 
   context,
 }) => {
   const email = `profile-edit-avatar-oversized-${Date.now()}@example.com`;
-  const token = await registerUser(email, 'password123');
-  await loginAs(page, context, token);
+  const { refreshTokenCookie } = await registerUser(email, 'password123');
+  await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto('/profile');
 
@@ -113,14 +103,17 @@ test('deleting the avatar reverts to the placeholder', async ({
   context,
 }) => {
   const email = `profile-edit-avatar-delete-${Date.now()}@example.com`;
-  const token = await registerUser(email, 'password123');
+  const { accessToken: token, refreshTokenCookie } = await registerUser(
+    email,
+    'password123',
+  );
   await uploadAvatar(
     token,
     'avatar.png',
     Buffer.from(PNG_BASE64, 'base64'),
     'image/png',
   );
-  await loginAs(page, context, token);
+  await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto('/profile');
   await expect(page.getByRole('img', { name: /аватар/i })).toBeVisible();

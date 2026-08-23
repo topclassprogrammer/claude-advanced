@@ -2,14 +2,8 @@ import { writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { test, expect } from '@playwright/test';
-import {
-  registerUser,
-  createMeeting,
-  uploadMeetingFile,
-  getMeeting,
-} from './helpers/api';
-
-const API_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:3001';
+import { registerUser, createMeeting, uploadMeetingFile } from './helpers/api';
+import { setSessionCookie } from './helpers/session';
 
 async function setupMeeting(
   prefix: string,
@@ -17,20 +11,23 @@ async function setupMeeting(
 ) {
   const email = `${prefix}-${Date.now()}@example.com`;
   const password = 'password123';
-  const token = await registerUser(email, password);
+  const { accessToken: token, refreshTokenCookie } = await registerUser(
+    email,
+    password,
+  );
   const meetingId = await createMeeting(token, {
     title: overrides.title ?? 'Sprint retro',
     date: overrides.date ?? '2026-09-03T10:00:00.000Z',
     participants: [],
   });
-  return { token, meetingId };
+  return { token, refreshTokenCookie, meetingId };
 }
 
 test('displays attached meeting file card with working download', async ({
   page,
   context,
 }) => {
-  const { token, meetingId } = await setupMeeting('file-card', {
+  const { token, refreshTokenCookie, meetingId } = await setupMeeting('file-card', {
     title: 'Sprint planning',
     date: '2026-09-01T10:00:00.000Z',
   });
@@ -38,9 +35,7 @@ test('displays attached meeting file card with working download', async ({
   const content = 'hello meeting notes';
   await uploadMeetingFile(token, meetingId, filename, content, 'text/plain');
 
-  await context.addInitScript((accessToken) => {
-    window.localStorage.setItem('accessToken', accessToken);
-  }, token);
+  await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto(`/meetings/${meetingId}`);
 
@@ -61,14 +56,12 @@ test('shows empty state when meeting has no attached file', async ({
   page,
   context,
 }) => {
-  const { token, meetingId } = await setupMeeting('file-card-empty', {
+  const { refreshTokenCookie, meetingId } = await setupMeeting('file-card-empty', {
     title: 'No file meeting',
     date: '2026-09-02T10:00:00.000Z',
   });
 
-  await context.addInitScript((accessToken) => {
-    window.localStorage.setItem('accessToken', accessToken);
-  }, token);
+  await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto(`/meetings/${meetingId}`);
 
@@ -80,11 +73,9 @@ test('uploads a file via click-to-select, shows progress and updates the file ca
   page,
   context,
 }) => {
-  const { token, meetingId } = await setupMeeting('file-upload');
+  const { refreshTokenCookie, meetingId } = await setupMeeting('file-upload');
 
-  await context.addInitScript((accessToken) => {
-    window.localStorage.setItem('accessToken', accessToken);
-  }, token);
+  await setSessionCookie(context, refreshTokenCookie);
 
   // Delay the server's response so the progress UI stays visible long enough to assert on.
   await page.route('**/meetings/*/files', async (route) => {
@@ -115,11 +106,9 @@ test('adds a second file alongside the first instead of replacing it', async ({
   page,
   context,
 }) => {
-  const { token, meetingId } = await setupMeeting('file-upload-multi');
+  const { refreshTokenCookie, meetingId } = await setupMeeting('file-upload-multi');
 
-  await context.addInitScript((accessToken) => {
-    window.localStorage.setItem('accessToken', accessToken);
-  }, token);
+  await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto(`/meetings/${meetingId}`);
 
@@ -143,7 +132,7 @@ test('hides the upload zone once the meeting already has 10 files', async ({
   page,
   context,
 }) => {
-  const { token, meetingId } = await setupMeeting('file-upload-limit');
+  const { token, refreshTokenCookie, meetingId } = await setupMeeting('file-upload-limit');
 
   for (let i = 0; i < 10; i += 1) {
     await uploadMeetingFile(
@@ -155,9 +144,7 @@ test('hides the upload zone once the meeting already has 10 files', async ({
     );
   }
 
-  await context.addInitScript((accessToken) => {
-    window.localStorage.setItem('accessToken', accessToken);
-  }, token);
+  await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto(`/meetings/${meetingId}`);
 
@@ -171,11 +158,9 @@ test('rejects a file with a disallowed type with a clear error', async ({
   page,
   context,
 }) => {
-  const { token, meetingId } = await setupMeeting('file-upload-bad-type');
+  const { refreshTokenCookie, meetingId } = await setupMeeting('file-upload-bad-type');
 
-  await context.addInitScript((accessToken) => {
-    window.localStorage.setItem('accessToken', accessToken);
-  }, token);
+  await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto(`/meetings/${meetingId}`);
 
@@ -193,11 +178,9 @@ test('rejects a file exceeding the maximum size with a clear error', async ({
   page,
   context,
 }) => {
-  const { token, meetingId } = await setupMeeting('file-upload-too-big');
+  const { refreshTokenCookie, meetingId } = await setupMeeting('file-upload-too-big');
 
-  await context.addInitScript((accessToken) => {
-    window.localStorage.setItem('accessToken', accessToken);
-  }, token);
+  await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto(`/meetings/${meetingId}`);
 
@@ -213,15 +196,13 @@ test('organizer deletes the attached file and card reverts to empty state', asyn
   page,
   context,
 }) => {
-  const { token, meetingId } = await setupMeeting('file-delete', {
+  const { token, refreshTokenCookie, meetingId } = await setupMeeting('file-delete', {
     title: 'Retro',
     date: '2026-09-04T10:00:00.000Z',
   });
   await uploadMeetingFile(token, meetingId, 'notes.txt', 'hello', 'text/plain');
 
-  await context.addInitScript((accessToken) => {
-    window.localStorage.setItem('accessToken', accessToken);
-  }, token);
+  await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto(`/meetings/${meetingId}`);
   await expect(page.getByText('notes.txt')).toBeVisible();
@@ -242,7 +223,7 @@ test('deletes only the selected file, leaving the others attached', async ({
   page,
   context,
 }) => {
-  const { token, meetingId } = await setupMeeting('file-delete-selective', {
+  const { token, refreshTokenCookie, meetingId } = await setupMeeting('file-delete-selective', {
     title: 'Retro with multiple files',
     date: '2026-09-04T12:00:00.000Z',
   });
@@ -255,9 +236,7 @@ test('deletes only the selected file, leaving the others attached', async ({
     'text/plain',
   );
 
-  await context.addInitScript((accessToken) => {
-    window.localStorage.setItem('accessToken', accessToken);
-  }, token);
+  await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto(`/meetings/${meetingId}`);
   await expect(page.getByText('keep.txt')).toBeVisible();
@@ -281,15 +260,13 @@ test('cancelling the confirmation dialog keeps the file attached', async ({
   page,
   context,
 }) => {
-  const { token, meetingId } = await setupMeeting('file-delete-cancel', {
+  const { token, refreshTokenCookie, meetingId } = await setupMeeting('file-delete-cancel', {
     title: 'Cancel deletion',
     date: '2026-09-04T11:00:00.000Z',
   });
   await uploadMeetingFile(token, meetingId, 'keep.txt', 'hello', 'text/plain');
 
-  await context.addInitScript((accessToken) => {
-    window.localStorage.setItem('accessToken', accessToken);
-  }, token);
+  await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto(`/meetings/${meetingId}`);
   await page.getByRole('button', { name: /удалить/i }).click();
@@ -302,7 +279,7 @@ test('cancelling the confirmation dialog keeps the file attached', async ({
   await expect(page.getByText('keep.txt')).toBeVisible();
 });
 
-test('delete button is not visible to a non-organizer', async ({
+test('a non-organizer cannot view another user\'s meeting or its files', async ({
   page,
   context,
 }) => {
@@ -317,44 +294,32 @@ test('delete button is not visible to a non-organizer', async ({
     'shared content',
     'text/plain',
   );
-  const meeting = await getMeeting(organizerToken, meetingId);
 
   const otherEmail = `file-delete-other-${Date.now()}@example.com`;
-  const otherToken = await registerUser(otherEmail, 'password123');
+  const { refreshTokenCookie: otherRefreshTokenCookie } = await registerUser(
+    otherEmail,
+    'password123',
+  );
+  await setSessionCookie(context, otherRefreshTokenCookie);
 
-  await context.addInitScript((accessToken) => {
-    window.localStorage.setItem('accessToken', accessToken);
-  }, otherToken);
-
-  // The meeting itself is only readable by its organizer; to exercise the
-  // "non-organizer viewing a meeting's file" UI state without changing that
-  // backend rule, the meeting fetch is mocked to return the organizer's
-  // meeting while the file endpoints hit the real API with the other user's
-  // (non-organizer) token, which is not organizer-gated for reads. Matched
-  // against the API origin exactly, so the Next.js page route of the same
-  // shape (http://localhost:3000/meetings/:id) is left untouched.
-  await page.route(`${API_URL}/meetings/${meetingId}`, async (route) => {
-    await route.fulfill({ status: 200, json: meeting });
-  });
-
+  // GET /meetings/:id (and the file endpoints) 404/403 for anyone but the
+  // organizer, so a non-organizer never sees the meeting's files.
   await page.goto(`/meetings/${meetingId}`);
 
-  await expect(page.getByText('shared.txt')).toBeVisible();
-  await expect(page.getByRole('button', { name: /удалить/i })).toHaveCount(0);
+  await expect(page.getByText(/не удалось загрузить встречу/i)).toBeVisible();
+  await expect(page.getByText('shared.txt')).toHaveCount(0);
 });
 
 test('full lifecycle: upload, display, download, delete', async ({
   page,
   context,
 }) => {
-  const { token, meetingId } = await setupMeeting('file-lifecycle', {
+  const { refreshTokenCookie, meetingId } = await setupMeeting('file-lifecycle', {
     title: 'Lifecycle meeting',
     date: '2026-09-06T10:00:00.000Z',
   });
 
-  await context.addInitScript((accessToken) => {
-    window.localStorage.setItem('accessToken', accessToken);
-  }, token);
+  await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto(`/meetings/${meetingId}`);
   await expect(page.getByText(/файлы не прикреплены/i)).toBeVisible();

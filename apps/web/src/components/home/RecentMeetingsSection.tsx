@@ -4,11 +4,9 @@ import { MeetingRow } from './MeetingRow';
 
 export function RecentMeetingsSection({
   meetings,
-  token,
   onDeleted,
 }: {
   meetings: Meeting[];
-  token: string;
   onDeleted: (meetingId: string) => void;
 }) {
   if (meetings.length === 0) return null;
@@ -26,7 +24,6 @@ export function RecentMeetingsSection({
           <MeetingRow
             key={meeting.id}
             meeting={meeting}
-            token={token}
             onDeleted={onDeleted}
             highlighted
           />

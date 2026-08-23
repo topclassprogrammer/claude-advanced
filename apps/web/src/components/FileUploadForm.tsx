@@ -25,13 +25,11 @@ function validateFile(file: File): string | null {
 }
 
 export function FileUploadForm({
-  token,
   meetingId,
   filesCount,
   onUploaded,
   compact = false,
 }: {
-  token: string;
   meetingId: string;
   /** Текущее число файлов встречи — форма скрывает зону загрузки, когда достигнут лимит MAX_FILES_PER_MEETING. */
   filesCount: number;
@@ -53,7 +51,7 @@ export function FileUploadForm({
   } = useFileUpload({
     validate: validateFile,
     upload: (file, onProgress) =>
-      uploadMeetingFile(token, meetingId, file, onProgress),
+      uploadMeetingFile(meetingId, file, onProgress),
     onUploaded,
     defaultErrorMessage: 'Не удалось загрузить файл. Попробуйте ещё раз.',
   });

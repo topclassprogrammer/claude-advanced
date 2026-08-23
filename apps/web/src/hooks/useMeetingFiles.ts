@@ -9,7 +9,6 @@ import {
 } from '@/lib/meeting-file-api';
 
 export function useMeetingFiles(
-  token: string,
   meetingId: string,
   options?: { autoLoad?: boolean },
 ): {
@@ -27,17 +26,17 @@ export function useMeetingFiles(
   useEffect(() => {
     if (!autoLoad) return;
 
-    getMeetingFiles(token, meetingId)
+    getMeetingFiles(meetingId)
       .then(setFiles)
       .finally(() => setLoaded(true));
-  }, [autoLoad, token, meetingId]);
+  }, [autoLoad, meetingId]);
 
   const handleDownload = async (file: MeetingFile): Promise<void> => {
-    await downloadMeetingFile(token, meetingId, file.id, file.filename);
+    await downloadMeetingFile(meetingId, file.id, file.filename);
   };
 
   const handleDelete = async (file: MeetingFile): Promise<void> => {
-    await deleteMeetingFile(token, meetingId, file.id);
+    await deleteMeetingFile(meetingId, file.id);
     setFiles((prev) => prev.filter((f) => f.id !== file.id));
   };
 

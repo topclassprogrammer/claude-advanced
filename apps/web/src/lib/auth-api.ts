@@ -10,8 +10,24 @@ export class ApiError extends Error {
   }
 }
 
-type RegisterResponse = { accessToken: string };
-type LoginResponse = { accessToken: string };
+export type CurrentUser = { sub: string; email: string };
+
+/**
+ * Access-токен живёт только в памяти этого модуля — не в localStorage и не
+ * в куке. Пропадает при полной перезагрузке страницы, поэтому на bootstrap
+ * сессии (useSession) сначала вызывается refreshAccessToken(), которая
+ * восстанавливает его по httpOnly refresh-куке (см. apps/api/CLAUDE.md).
+ */
+let accessToken: string | null = null;
+let refreshPromise: Promise<string | null> | null = null;
+
+export function getAccessToken(): string | null {
+  return accessToken;
+}
+
+function setAccessToken(token: string | null): void {
+  accessToken = token;
+}
 
 function extractErrorMessage(body: unknown, fallback: string): string {
   if (body && typeof body === 'object' && 'message' in body) {
@@ -22,12 +38,10 @@ function extractErrorMessage(body: unknown, fallback: string): string {
   return fallback;
 }
 
-export async function register(
-  email: string,
-  password: string,
-): Promise<RegisterResponse> {
+export async function register(email: string, password: string): Promise<void> {
   const res = await fetch(`${API_URL}/auth/register`, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
@@ -41,15 +55,13 @@ export async function register(
     );
   }
 
-  return body as RegisterResponse;
+  setAccessToken((body as { accessToken: string }).accessToken);
 }
 
-export async function login(
-  email: string,
-  password: string,
-): Promise<LoginResponse> {
+export async function login(email: string, password: string): Promise<void> {
   const res = await fetch(`${API_URL}/auth/login`, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
@@ -63,5 +75,84 @@ export async function login(
     );
   }
 
-  return body as LoginResponse;
+  setAccessToken((body as { accessToken: string }).accessToken);
+}
+
+/** Очищает refresh-куку на бэкенде (POST /auth/logout) и локальный access-токен. */
+export async function logout(): Promise<void> {
+  await fetch(`${API_URL}/auth/logout`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  setAccessToken(null);
+}
+
+/**
+ * Обменивает httpOnly refresh-куку на новый access-токен (POST /auth/refresh)
+ * и сохраняет его в памяти. Возвращает null, если куки нет/она невалидна —
+ * вызывающий код (useSession, authorizedFetch) в этом случае считает
+ * пользователя неавторизованным.
+ */
+export async function refreshAccessToken(): Promise<string | null> {
+  const res = await fetch(`${API_URL}/auth/refresh`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    setAccessToken(null);
+    return null;
+  }
+
+  const body = (await res.json()) as { accessToken: string };
+  setAccessToken(body.accessToken);
+  return body.accessToken;
+}
+
+/** Дедуплицирует конкурентные silent-refresh — несколько 401 почти одновременно должны обменять куку только один раз. */
+function dedupedRefresh(): Promise<string | null> {
+  if (!refreshPromise) {
+    refreshPromise = refreshAccessToken().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
+/**
+ * fetch к apps/api с автоматическим Authorization: Bearer <accessToken> из
+ * памяти. При 401 (истёкший access-токен) один раз молча обновляет его через
+ * refreshAccessToken() и повторяет запрос — если и это не помогло, отдаёт
+ * исходный 401-ответ вызывающему коду как есть.
+ */
+export async function authorizedFetch(
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const attempt = async (): Promise<Response> => {
+    const headers = new Headers(init.headers);
+    if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+    return fetch(`${API_URL}${path}`, { ...init, headers });
+  };
+
+  const res = await attempt();
+  if (res.status !== 401) return res;
+
+  const refreshed = await dedupedRefresh();
+  if (!refreshed) return res;
+
+  return attempt();
+}
+
+/** Текущий пользователь по access-токену (GET /auth/me). */
+export async function getCurrentUser(): Promise<CurrentUser> {
+  const res = await authorizedFetch('/auth/me');
+
+  const body: unknown = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    throw new ApiError(extractErrorMessage(body, 'Не авторизован'), res.status);
+  }
+
+  return body as CurrentUser;
 }

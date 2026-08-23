@@ -3,16 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  clearAccessToken,
   getAccessToken,
-  getEmailFromToken,
-  getUserIdFromToken,
-} from '@/lib/session';
+  getCurrentUser,
+  logout as logoutRequest,
+  refreshAccessToken,
+} from '@/lib/auth-api';
 
 export type Session = {
-  token: string;
-  email: string | null;
-  userId: string | null;
+  email: string;
+  userId: string;
 };
 
 export function useSession(): { session: Session | null; logout: () => void } {
@@ -20,25 +19,37 @@ export function useSession(): { session: Session | null; logout: () => void } {
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
-    const token = getAccessToken();
-    if (!token) {
-      router.replace('/auth/login');
-      return;
-    }
+    let cancelled = false;
 
-    // localStorage — внешнее (browser-only) хранилище, недоступное при SSR,
-    // поэтому токен можно прочитать только на клиенте внутри эффекта.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSession({
-      token,
-      email: getEmailFromToken(token),
-      userId: getUserIdFromToken(token),
-    });
+    (async () => {
+      // После полной перезагрузки страницы access-токен в памяти теряется —
+      // сначала молча восстанавливаем его по httpOnly refresh-куке. Если
+      // токен уже есть (SPA-переход сразу после логина/регистрации),
+      // лишний round-trip не нужен.
+      if (!getAccessToken()) {
+        const refreshed = await refreshAccessToken();
+        if (!refreshed) {
+          if (!cancelled) router.replace('/auth/login');
+          return;
+        }
+      }
+
+      try {
+        const user = await getCurrentUser();
+        if (cancelled) return;
+        setSession({ email: user.email, userId: user.sub });
+      } catch {
+        if (!cancelled) router.replace('/auth/login');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   const logout = () => {
-    clearAccessToken();
-    router.replace('/auth/login');
+    void logoutRequest().finally(() => router.replace('/auth/login'));
   };
 
   return { session, logout };

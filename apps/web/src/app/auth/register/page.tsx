@@ -14,7 +14,6 @@ import {
   TextField,
 } from '@heroui/react';
 import { ApiError, register } from '@/lib/auth-api';
-import { setAccessToken } from '@/lib/session';
 import { EMAIL_PATTERN } from '@/lib/email-pattern';
 import { AuthFormShell } from '@/components/auth/AuthFormShell';
 import { PasswordField } from '@/components/auth/PasswordField';
@@ -34,8 +33,7 @@ export default function RegisterPage() {
 
     setPending(true);
     try {
-      const { accessToken } = await register(email, password);
-      setAccessToken(accessToken);
+      await register(email, password);
       setSuccess(true);
     } catch (err) {
       setError(

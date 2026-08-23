@@ -4,24 +4,27 @@ import { RegisterCommand } from '../impl/register.command';
 import { CreateUserCommand } from '../../../users/commands/impl/create-user.command';
 import { UserRecord } from '../../../users/user.types';
 
+export interface RegisterResult {
+  accessToken: string;
+  userId: string;
+}
+
 @CommandHandler(RegisterCommand)
 export class RegisterHandler implements ICommandHandler<
   RegisterCommand,
-  { accessToken: string }
+  RegisterResult
 > {
   constructor(
     private readonly commandBus: CommandBus,
     private readonly authTokenService: AuthTokenService,
   ) {}
 
-  async execute({
-    email,
-    password,
-  }: RegisterCommand): Promise<{ accessToken: string }> {
+  async execute({ email, password }: RegisterCommand): Promise<RegisterResult> {
     const user = await this.commandBus.execute<CreateUserCommand, UserRecord>(
       new CreateUserCommand(email, password),
     );
 
-    return this.authTokenService.sign(user.id, user.email);
+    const { accessToken } = this.authTokenService.sign(user.id, user.email);
+    return { accessToken, userId: user.id };
   }
 }

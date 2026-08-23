@@ -8,7 +8,7 @@
 
 Порт — `process.env.PORT` (в `apps/api/.env` задан как `3001`, не конфликтует с `apps/web` на 3000), иначе по умолчанию `3000`.
 
-CORS включён (`app.enableCors()` в `main.ts`) для origin'а из `process.env.WEB_ORIGIN` (по умолчанию `http://localhost:3000`, задаётся в `apps/api/.env`/`.env.example`) — чтобы `apps/web` мог напрямую вызывать API из браузера.
+CORS включён (`app.enableCors()` в `main.ts`) для origin'а из `process.env.WEB_ORIGIN` (по умолчанию `http://localhost:3000`, задаётся в `apps/api/.env`/`.env.example`) с `credentials: true` — чтобы `apps/web` мог напрямую вызывать API из браузера и чтобы browser принимал/отправлял httpOnly-куку `refreshToken` при кросс-origin запросах (см. «Аутентификация» ниже).
 
 ## База данных
 
@@ -16,9 +16,24 @@ PostgreSQL поднимается через корневой `docker-compose.ym
 
 Prisma 7 требует driver adapter для SQL-провайдеров: используется `@prisma/adapter-pg` поверх `pg`. Generator сконфигурирован с `moduleFormat = "cjs"` (проект целиком на CommonJS), клиент генерируется в `apps/api/generated/prisma` (не коммитится, генерируется командой `prisma:generate`).
 
+## Аутентификация
+
+Двухтокенная схема: короткоживущий access-токен (JWT, по умолчанию 15 минут) передаётся заголовком `Authorization: Bearer` и живёт только в памяти фронтенда (см. `apps/web/CLAUDE.md`); долгоживущий refresh-токен (случайные 32 байта, 30 дней по умолчанию) лежит в httpOnly-куке `refreshToken`, скоуплен на `/auth`, и обменивается на новый access-токен через `POST /auth/refresh` с ротацией при каждом обмене.
+
+- `POST /auth/register` и `POST /auth/login` возвращают `{ accessToken }` в JSON-теле и дополнительно выпускают refresh-токен (`IssueRefreshTokenCommand`/`IssueRefreshTokenHandler`) — его хеш (SHA-256, `refresh-token.util.ts`) сохраняется в таблице `RefreshToken`, сырое значение уходит в httpOnly-куку через `setRefreshTokenCookie` (`refresh-token-cookie.util.ts`: `httpOnly: true`, `sameSite: 'lax'`, `secure` только при `NODE_ENV=production`, `path: '/auth'`, `maxAge` из `REFRESH_TOKEN_TTL_DAYS`).
+- `POST /auth/refresh` — берёт `refreshToken` из куки, ротирует его (`RotateRefreshTokenCommand`/`RotateRefreshTokenHandler`: старый токен помечается `revokedAt`/`replacedByTokenId`, создаётся новый, выдаётся новый access-токен), ставит новую куку. 401, если куки нет, токен не найден/просрочен, либо это повторное предъявление уже отозванного токена за пределами grace period (см. ниже). Ограничен `@Throttle` до 20 запросов/мин (выше, чем у login/register — вызывается автоматически при каждой загрузке страницы и по истечении access-токена).
+- Повторное использование токена, отозванного через ротацию **менее 10 секунд назад** (`REUSE_GRACE_PERIOD_MS`), не считается кражей — это штатная гонка нескольких вкладок/повторного запроса, ротировавших один и тот же refresh-токен почти одновременно. Токен, отозванный **явно** (logout, смена пароля) или предъявленный спустя долгий срок после ротации, при повторном использовании расценивается как компрометация — отзывается вся цепочка refresh-токенов пользователя (`RefreshToken.replacedByTokenId` отличает «отозван ротацией» от «отозван явно», иначе grace period замаскировал бы настоящий logout).
+- `POST /auth/logout` — если в куке есть refresh-токен, отзывает его (`RevokeRefreshTokenCommand`), затем чистит куку (`clearRefreshTokenCookie`); не требует `JwtAuthGuard` и не ошибается, если куки нет. Access-токен при этом не инвалидируется — он просто доживает свой короткий TTL.
+- `GET /auth/me` (под `JwtAuthGuard`, только по заголовку) — возвращает `{ sub, email }` текущего пользователя; `apps/web` использует его при bootstrap сессии после silent-refresh (JWT в памяти теряется при перезагрузке страницы).
+- `JwtAuthGuard` читает токен только из заголовка `Authorization: Bearer` (куки больше не участвуют в аутентификации запросов — `refreshToken` предъявляется исключительно `/auth/refresh` и `/auth/logout`, чей `path: '/auth'` и не долетает до остальных роутов). `JWT_SECRET` валидируется при старте `AuthModule` (обязателен, минимум 32 символа); `jwt.verify` ограничен `algorithms: ['HS256']`.
+- `JwtAuthGuard` — асинхронный: помимо проверки подписи и срока действия access-токена, сверяет его `iat` с `User.passwordChangedAt` через `PrismaService` (глобальный, инжектится напрямую) и отклоняет токены, выпущенные до последней смены пароля (401).
+- `ChangePasswordHandler` при смене пароля не только проставляет `passwordChangedAt` (инвалидирует уже выданные access-токены), но и отправляет `RevokeAllRefreshTokensCommand` через `CommandBus` (`ProfileModule` → `AuthModule`, межмодульно, как и остальной CQRS в проекте) — иначе украденный до смены пароля refresh-токен продолжил бы молча выписывать новые access-токены и после смены пароля.
+- CSRF: `refreshToken` — `sameSite: 'lax'`, что блокирует её отправку для кросс-site запросов не-навигацией (fetch/XHR с другого домена); отдельный CSRF-токен не заведён. Работает, пока `apps/web` и `apps/api` — один site по правилам браузера (одинаковый registrable domain, порт не учитывается — в деве оба на `localhost`, в проде должны быть на одном домене/поддоменах одного домена). Если в проде они окажутся на разных доменах (разные site), `sameSite: 'lax'`-кука не будет отправляться кросс-origin запросами вообще — потребуется либо общий домен, либо явный CSRF-токен. Сам access-токен в заголовке CSRF не подвержен в принципе (не отправляется браузером автоматически).
+- `RefreshToken` (Prisma-модель): `tokenHash` (уникальный, SHA-256 сырого токена — сырое значение нигде не персистится), `expiresAt`, `revokedAt`, `replacedByTokenId`, `@@index([userId])`, `onDelete: Cascade` от `User`. Очистка протухших/отозванных строк по расписанию не реализована (известный follow-up, не критично — сами по себе они не дают доступа).
+
 ## Безопасность
 
-- Rate limiting — `@nestjs/throttler`, глобальный гвард (`APP_GUARD`) с лимитом по умолчанию 100 запросов/мин; `/auth/register`, `/auth/login` и `PATCH /users/me/password` дополнительно ограничены декоратором `@Throttle` до 5 запросов/мин. В e2e-тестах (`NODE_ENV=test`) throttling отключается целиком (`NoopThrottlerGuard` в `app.module.ts`) — реальные спеки регистрируют по нескольку пользователей с одного IP в `beforeEach` и упёрлись бы в лимит за пару файлов.
+- Rate limiting — `@nestjs/throttler`, глобальный гвард (`APP_GUARD`) с лимитом по умолчанию 100 запросов/мин; `/auth/register`, `/auth/login` и `PATCH /users/me/password` дополнительно ограничены декоратором `@Throttle` до 5 запросов/мин. Throttling активен только при `NODE_ENV=production` (`NoopThrottlerGuard` в `app.module.ts` в остальных режимах) — и Jest e2e apps/api (регистрируют по нескольку пользователей с одного IP в `beforeEach`), и Playwright e2e apps/web (`fullyParallel`, параллельные регистрации со многих воркеров) упёрлись бы в лимит за пару тестовых файлов.
 - `main.ts` подключает `helmet()` (security headers, включая `X-Content-Type-Options: nosniff` — значимо для эндпоинтов, отдающих файлы с client-controlled `Content-Type`) и падает при старте, если `WEB_ORIGIN` не задан в `NODE_ENV=production`; CORS ограничен явным списком методов/заголовков.
 - Логин (`LoginHandler`) выполняет `bcrypt.compare` с фиктивным хешем, даже если email не найден — постоянное время ответа не позволяет отличить «нет такого email» от «неверный пароль» (user enumeration через timing).
 - Авторизация файлов встречи симметрична авторизации самой встречи: загрузка/чтение метаданных/скачивание/удаление файлов доступны только организатору встречи (403 для остальных) — как и `GET /meetings/:id`, который 404-ит для не-организатора. Ранее загрузка/чтение/скачивание были открыты любому авторизованному пользователю системы; сужено до организатора как исправление IDOR.
@@ -42,7 +57,7 @@ Prisma 7 требует driver adapter для SQL-провайдеров: исп
 
 ```
 prisma/
-  schema.prisma          — схема БД (модели User, Meeting — с необязательным полем description, MeetingFile) и generator/datasource
+  schema.prisma          — схема БД (модели User, Meeting — с необязательным полем description, MeetingFile, RefreshToken) и generator/datasource
   migrations/              — SQL-миграции
 src/
   main.ts                    — точка входа, bootstrap Nest-приложения
@@ -56,14 +71,21 @@ src/
     commands/impl/create-user.command.ts, commands/handlers/create-user.handler.ts — создание пользователя: проверяет уникальность email (409 `ConflictException` при дубликате), хеширует пароль (bcrypt) и сохраняет через `PrismaService`
     queries/impl/find-user-by-email.query.ts, queries/handlers/find-user-by-email.handler.ts — поиск пользователя по email через `PrismaService`, возвращает `UserRecord | null` (включая хеш пароля — нужен `AuthModule` для проверки при логине)
   auth/
-    auth.module.ts                   — регистрирует CqrsModule, JwtModule (секрет валидируется при старте — обязателен, минимум 32 символа, TTL из ConfigService, `signOptions.algorithm: 'HS256'`) и импортирует UsersModule (для общего CommandBus/QueryBus в графе Nest); экспортирует JwtModule и JwtAuthGuard для использования другими модулями
-    auth.controller.ts                — POST /auth/register (CommandBus), POST /auth/login (QueryBus), оба ограничены декоратором `@Throttle` до 5 запросов/мин
-    auth-token.service.ts               — общая выдача JWT (payload sub/email), используется обоими хендлерами
-    jwt-auth.guard.ts                    — гвард `JwtAuthGuard` (асинхронный): проверяет Bearer-токен (подпись/алгоритм `HS256`/срок действия) и `passwordChangedAt` через `PrismaService`, кладёт payload в `request.user` (401 при отсутствии/невалидности/протухании токена)
+    auth.module.ts                   — регистрирует CqrsModule, JwtModule (секрет валидируется, TTL access-токена из ConfigService, по умолчанию 15m, `signOptions.algorithm: 'HS256'`) и импортирует UsersModule (для общего CommandBus/QueryBus в графе Nest); providers включают все refresh-token-хендлеры (см. ниже); экспортирует JwtModule и JwtAuthGuard для использования другими модулями
+    auth.controller.ts                — POST /auth/register и POST /auth/login (оба выдают access-токен в теле + ставят httpOnly refresh-куку), POST /auth/refresh (ротация refresh-токена → новый access-токен + новая кука), POST /auth/logout (отзывает refresh-токен, чистит куку), GET /auth/me (под JwtAuthGuard, только по заголовку) — см. «Аутентификация»
+    auth-token.service.ts               — общая выдача access-токена (JWT, payload sub/email), используется register/login/refresh-хендлерами
+    refresh-token-cookie.util.ts         — `REFRESH_TOKEN_COOKIE`, `setRefreshTokenCookie`/`clearRefreshTokenCookie` (httpOnly/sameSite=lax/secure-в-проде/`path: '/auth'` кука с refresh-токеном)
+    refresh-token.constants.ts           — `REFRESH_TOKEN_COOKIE`, `refreshTokenTtlMs()` (парсит `REFRESH_TOKEN_TTL_DAYS`, по умолчанию 30 дней) — общий источник TTL для куки и БД
+    refresh-token.util.ts                — `generateRawRefreshToken()` (256 бит, `randomBytes`), `hashRefreshToken()` (SHA-256 — в БД хранится только хеш)
+    jwt-auth.guard.ts                    — гвард `JwtAuthGuard` (асинхронный): читает access-токен только из заголовка `Authorization: Bearer`, проверяет подпись/алгоритм/срок действия и `passwordChangedAt` через `PrismaService`, кладёт payload в `request.user` (401 при отсутствии/невалидности/протухании токена)
     current-user.decorator.ts             — параметр-декоратор `@CurrentUser()`, достаёт `request.user`
     express.d.ts                           — расширение типа `express.Request` полем `user`
-    commands/impl/register.command.ts, commands/handlers/register.handler.ts — регистрация: отправляет `CreateUserCommand` в `UsersModule` через `CommandBus`, затем выдаёт JWT
-    queries/impl/login.query.ts, queries/handlers/login.handler.ts           — логин: отправляет `FindUserByEmailQuery` в `UsersModule` через `QueryBus`, проверяет пароль (bcrypt.compare, 401 при отсутствии пользователя или неверном пароле), затем выдаёт JWT
+    commands/impl/register.command.ts, commands/handlers/register.handler.ts — регистрация: отправляет `CreateUserCommand` в `UsersModule` через `CommandBus`, возвращает `{ accessToken, userId }` (userId нужен контроллеру для выпуска refresh-токена)
+    commands/impl/issue-refresh-token.command.ts, commands/handlers/issue-refresh-token.handler.ts — создаёт запись `RefreshToken` (хеш + expiresAt), возвращает сырой токен
+    commands/impl/rotate-refresh-token.command.ts, commands/handlers/rotate-refresh-token.handler.ts — валидирует refresh-токен (404/просрочен/уже отозван — с grace period на повторное предъявление после ротации, см. «Аутентификация»), в транзакции создаёт новый и помечает старый `revokedAt`/`replacedByTokenId`, выдаёт новый access-токен
+    commands/impl/revoke-refresh-token.command.ts, commands/handlers/revoke-refresh-token.handler.ts — помечает один refresh-токен (по сырому значению) `revokedAt` — используется logout
+    commands/impl/revoke-all-refresh-tokens.command.ts, commands/handlers/revoke-all-refresh-tokens.handler.ts — помечает все активные refresh-токены пользователя `revokedAt` — используется сменой пароля и детектом кражи (reuse отозванного токена вне grace period)
+    queries/impl/login.query.ts, queries/handlers/login.handler.ts           — логин: отправляет `FindUserByEmailQuery` в `UsersModule` через `QueryBus`, проверяет пароль (bcrypt.compare, 401 при отсутствии пользователя или неверном пароле), возвращает `{ accessToken, userId }`
     dto/register.dto.ts, dto/login.dto.ts — class-validator DTO
   meeting/
     meeting.module.ts                 — импортирует CqrsModule и AuthModule (для JwtAuthGuard)
@@ -97,10 +119,10 @@ src/
     dto/update-profile-name.dto.ts — class-validator DTO (name, обязательная непустая строка)
     dto/change-password.dto.ts — class-validator DTO (oldPassword — обязательная непустая строка, newPassword — строка минимум 8 символов)
 test/
-  auth.e2e-spec.ts             — e2e-тесты /auth/register и /auth/login (используют реальную БД, очищают таблицу User в beforeEach)
+  auth.e2e-spec.ts             — e2e-тесты /auth/register, /auth/login (включая httpOnly Set-Cookie на refreshToken), /auth/me (только по Authorization-заголовку — кука его не аутентифицирует), /auth/refresh (ротация, 401 на отсутствующий/невалидный токен, толерантность к повторному предъявлению только что ротированного токена — гонка вкладок) и /auth/logout (отзыв refresh-токена, после которого /auth/refresh 401-ит) (используют реальную БД, очищают таблицы RefreshToken и User в beforeEach)
   meeting.e2e-spec.ts          — e2e-тесты /meetings (используют реальную БД, очищают таблицы Meeting и User в beforeEach; проверяют изоляцию встреч между пользователями)
   meeting-file.e2e-spec.ts     — e2e-тесты загрузки/списка/скачивания/удаления файлов встречи, включая лимит 10 файлов на встречу (409 на 11-й), выборочное удаление одного файла и 403 для не-организатора на всех четырёх операциях (используют реальную БД, очищают таблицы MeetingFile, Meeting и User в beforeEach)
-  profile.e2e-spec.ts          — e2e-тесты GET /users/me, PATCH /users/me/name, PATCH /users/me/password (включая отклонение неверного старого пароля, логин новым паролем после смены и инвалидацию ранее выданного access-токена) и загрузки/замены/удаления/отдачи аватара (POST/DELETE/GET /users/me/avatar, включая отклонение недопустимого MIME-типа и файла > 5 МБ, замену с удалением старого файла с диска, `avatarUrl` в ответе `GET /users/me`) — используют реальную БД, очищают таблицы Meeting и User в beforeEach
+  profile.e2e-spec.ts          — e2e-тесты GET /users/me, PATCH /users/me/name, PATCH /users/me/password (включая отклонение неверного старого пароля, логин новым паролем после смены, инвалидацию ранее выданного access-токена и отзыв refresh-токена — /auth/refresh 401-ит после смены пароля) и загрузки/замены/удаления/отдачи аватара (POST/DELETE/GET /users/me/avatar, включая отклонение недопустимого MIME-типа и файла > 5 МБ, замену с удалением старого файла с диска, `avatarUrl` в ответе `GET /users/me`) — используют реальную БД, очищают таблицы Meeting и User в beforeEach
   jest-e2e.json                 — конфиг Jest для e2e
 ```
 

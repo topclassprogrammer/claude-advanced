@@ -1,4 +1,4 @@
-import { ApiError } from './auth-api';
+import { ApiError, authorizedFetch, getAccessToken } from './auth-api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -21,13 +21,8 @@ function extractErrorMessage(body: unknown, fallback: string): string {
 }
 
 /** Список файлов встречи (до 10, самые новые первыми). */
-export async function getMeetingFiles(
-  token: string,
-  meetingId: string,
-): Promise<MeetingFile[]> {
-  const res = await fetch(`${API_URL}/meetings/${meetingId}/files`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function getMeetingFiles(meetingId: string): Promise<MeetingFile[]> {
+  const res = await authorizedFetch(`/meetings/${meetingId}/files`);
 
   const body: unknown = await res.json().catch(() => null);
 
@@ -44,11 +39,11 @@ export async function getMeetingFiles(
 /**
  * Загружает файл встречи с отслеживанием прогресса отправки.
  * Используется XMLHttpRequest, а не fetch: fetch не даёт событий прогресса для тела запроса,
- * только для чтения ответа (см. docs/research-meeting-file-upload.md, §5).
+ * только для чтения ответа (см. docs/research-meeting-file-upload.md, §5) — поэтому не может
+ * идти через authorizedFetch (нет retry-on-401, access-токен из памяти прикладывается напрямую).
  * Возвращает 409, если у встречи уже прикреплено максимальное число файлов (10).
  */
 export function uploadMeetingFile(
-  token: string,
   meetingId: string,
   file: File,
   onProgress?: (percent: number) => void,
@@ -56,7 +51,8 @@ export function uploadMeetingFile(
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${API_URL}/meetings/${meetingId}/files`);
-    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    const token = getAccessToken();
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
 
     xhr.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable) {
@@ -98,13 +94,11 @@ export function uploadMeetingFile(
 
 /** Удаляет файл встречи. Доступно только организатору встречи (403 для остальных на бэкенде). */
 export async function deleteMeetingFile(
-  token: string,
   meetingId: string,
   fileId: string,
 ): Promise<void> {
-  const res = await fetch(`${API_URL}/meetings/${meetingId}/files/${fileId}`, {
+  const res = await authorizedFetch(`/meetings/${meetingId}/files/${fileId}`, {
     method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
   });
 
   if (!res.ok) {
@@ -118,14 +112,12 @@ export async function deleteMeetingFile(
 
 /** Скачивает файл встречи с авторизацией и запускает сохранение в браузере через blob-ссылку. */
 export async function downloadMeetingFile(
-  token: string,
   meetingId: string,
   fileId: string,
   filename: string,
 ): Promise<void> {
-  const res = await fetch(
-    `${API_URL}/meetings/${meetingId}/files/${fileId}/download`,
-    { headers: { Authorization: `Bearer ${token}` } },
+  const res = await authorizedFetch(
+    `/meetings/${meetingId}/files/${fileId}/download`,
   );
 
   if (!res.ok) {

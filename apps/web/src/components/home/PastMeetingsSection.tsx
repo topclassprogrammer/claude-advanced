@@ -4,12 +4,10 @@ import { PastMeetingRow } from './PastMeetingRow';
 
 export function PastMeetingsSection({
   meetings,
-  token,
   userId,
   onDeleted,
 }: {
   meetings: Meeting[];
-  token: string;
   userId: string | null;
   onDeleted: (meetingId: string) => void;
 }) {
@@ -29,7 +27,6 @@ export function PastMeetingsSection({
           <PastMeetingRow
             key={meeting.id}
             meeting={meeting}
-            token={token}
             userId={userId}
             onDeleted={onDeleted}
           />

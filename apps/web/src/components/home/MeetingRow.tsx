@@ -6,12 +6,10 @@ import { UsersIcon } from '@/components/icons/UsersIcon';
 
 export function MeetingRow({
   meeting,
-  token,
   onDeleted,
   highlighted,
 }: {
   meeting: Meeting;
-  token: string;
   onDeleted: (meetingId: string) => void;
   highlighted?: boolean;
 }) {
@@ -21,11 +19,7 @@ export function MeetingRow({
     >
       <div className="flex items-start justify-between gap-2">
         <p className="font-semibold text-foreground">{meeting.title}</p>
-        <DeleteMeetingButton
-          meeting={meeting}
-          token={token}
-          onDeleted={onDeleted}
-        />
+        <DeleteMeetingButton meeting={meeting} onDeleted={onDeleted} />
       </div>
       <div className="mt-1 flex items-center gap-1.5 text-sm text-muted">
         <IconCalendar className="size-4 shrink-0" />

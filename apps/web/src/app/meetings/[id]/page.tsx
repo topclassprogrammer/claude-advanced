@@ -23,15 +23,12 @@ export default function MeetingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { files, setFiles, handleDownload, handleDelete, handleUploaded } =
-    useMeetingFiles(session?.token ?? '', meetingId);
+    useMeetingFiles(meetingId);
 
   useEffect(() => {
     if (!session) return;
 
-    Promise.all([
-      getMeetingById(session.token, meetingId),
-      getMeetingFiles(session.token, meetingId),
-    ])
+    Promise.all([getMeetingById(meetingId), getMeetingFiles(meetingId)])
       .then(([meetingResult, filesResult]) => {
         setMeeting(meetingResult);
         setFiles(filesResult);
@@ -97,7 +94,6 @@ export default function MeetingPage() {
             />
 
             <FileUploadForm
-              token={session.token}
               meetingId={meetingId}
               filesCount={files.length}
               onUploaded={handleUploaded}

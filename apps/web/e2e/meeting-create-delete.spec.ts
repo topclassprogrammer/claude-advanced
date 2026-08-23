@@ -1,16 +1,15 @@
 import { test, expect } from '@playwright/test';
 import { registerUser, createMeeting } from './helpers/api';
+import { setSessionCookie } from './helpers/session';
 
 test('creates a meeting via the modal with title, date and description', async ({
   page,
   context,
 }) => {
   const email = `meeting-create-${Date.now()}@example.com`;
-  const token = await registerUser(email, 'password123');
+  const { refreshTokenCookie } = await registerUser(email, 'password123');
 
-  await context.addInitScript((accessToken) => {
-    window.localStorage.setItem('accessToken', accessToken);
-  }, token);
+  await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto('/');
   await expect(page.getByText(/у вас пока нет встреч/i)).toBeVisible();
@@ -40,16 +39,17 @@ test('deletes a meeting via the confirmation dialog', async ({
   context,
 }) => {
   const email = `meeting-delete-${Date.now()}@example.com`;
-  const token = await registerUser(email, 'password123');
+  const { accessToken: token, refreshTokenCookie } = await registerUser(
+    email,
+    'password123',
+  );
   await createMeeting(token, {
     title: 'Retro to delete',
     date: '2026-09-16T10:00:00.000Z',
     participants: [],
   });
 
-  await context.addInitScript((accessToken) => {
-    window.localStorage.setItem('accessToken', accessToken);
-  }, token);
+  await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto('/');
   await expect(page.getByText('Retro to delete').first()).toBeVisible();
@@ -72,16 +72,17 @@ test('cancelling the delete confirmation keeps the meeting', async ({
   context,
 }) => {
   const email = `meeting-delete-cancel-${Date.now()}@example.com`;
-  const token = await registerUser(email, 'password123');
+  const { accessToken: token, refreshTokenCookie } = await registerUser(
+    email,
+    'password123',
+  );
   await createMeeting(token, {
     title: 'Keep this meeting',
     date: '2026-09-17T10:00:00.000Z',
     participants: [],
   });
 
-  await context.addInitScript((accessToken) => {
-    window.localStorage.setItem('accessToken', accessToken);
-  }, token);
+  await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto('/');
   await page

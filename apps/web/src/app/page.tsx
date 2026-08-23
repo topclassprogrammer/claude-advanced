@@ -25,7 +25,7 @@ export default function HomePage() {
   useEffect(() => {
     if (!session) return;
 
-    getMeetings(session.token)
+    getMeetings()
       .then(setMeetings)
       .catch((err) => {
         setError(
@@ -39,7 +39,7 @@ export default function HomePage() {
   useEffect(() => {
     if (!session) return;
 
-    getProfile(session.token)
+    getProfile()
       .then(setProfile)
       .catch(() => {
         // Шапка остаётся с email, если профиль не удалось загрузить.
@@ -83,7 +83,6 @@ export default function HomePage() {
               className="flex items-center gap-2 rounded-full p-1 hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               <Avatar
-                token={session.token}
                 avatarUrl={profile?.avatarUrl ?? null}
                 name={profile?.name ?? session.email ?? '?'}
                 size="sm"
@@ -92,10 +91,7 @@ export default function HomePage() {
                 {profile?.name}
               </span>
             </Link>
-            <CreateMeetingModal
-              token={session.token}
-              onCreated={onMeetingCreated}
-            />
+            <CreateMeetingModal onCreated={onMeetingCreated} />
             <Button variant="outline" onPress={logout}>
               Выйти
             </Button>
@@ -124,21 +120,15 @@ export default function HomePage() {
           </EmptyState>
         ) : null}
 
-        <RecentMeetingsSection
-          meetings={recent}
-          token={session.token}
-          onDeleted={onMeetingDeleted}
-        />
+        <RecentMeetingsSection meetings={recent} onDeleted={onMeetingDeleted} />
 
         <UpcomingMeetingsSection
           meetings={upcoming}
-          token={session.token}
           onDeleted={onMeetingDeleted}
         />
 
         <PastMeetingsSection
           meetings={past}
-          token={session.token}
           userId={session.userId}
           onDeleted={onMeetingDeleted}
         />

@@ -1,6 +1,4 @@
-import { ApiError } from './auth-api';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+import { ApiError, authorizedFetch } from './auth-api';
 
 export type Profile = {
   email: string;
@@ -17,10 +15,8 @@ function extractErrorMessage(body: unknown, fallback: string): string {
   return fallback;
 }
 
-export async function getProfile(token: string): Promise<Profile> {
-  const res = await fetch(`${API_URL}/users/me`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function getProfile(): Promise<Profile> {
+  const res = await authorizedFetch('/users/me');
 
   const body: unknown = await res.json().catch(() => null);
 
@@ -35,16 +31,10 @@ export async function getProfile(token: string): Promise<Profile> {
 }
 
 /** Обновляет имя текущего пользователя, возвращает обновлённый профиль. */
-export async function updateProfileName(
-  token: string,
-  name: string,
-): Promise<Profile> {
-  const res = await fetch(`${API_URL}/users/me/name`, {
+export async function updateProfileName(name: string): Promise<Profile> {
+  const res = await authorizedFetch('/users/me/name', {
     method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
   });
 
@@ -62,16 +52,12 @@ export async function updateProfileName(
 
 /** Меняет пароль текущего пользователя. */
 export async function changePassword(
-  token: string,
   oldPassword: string,
   newPassword: string,
 ): Promise<void> {
-  const res = await fetch(`${API_URL}/users/me/password`, {
+  const res = await authorizedFetch('/users/me/password', {
     method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ oldPassword, newPassword }),
   });
 
@@ -85,16 +71,12 @@ export async function changePassword(
 }
 
 /** Загружает (или заменяет) аватар текущего пользователя, возвращает обновлённый профиль. */
-export async function uploadAvatar(
-  token: string,
-  file: File,
-): Promise<Profile> {
+export async function uploadAvatar(file: File): Promise<Profile> {
   const form = new FormData();
   form.append('avatar', file);
 
-  const res = await fetch(`${API_URL}/users/me/avatar`, {
+  const res = await authorizedFetch('/users/me/avatar', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
     body: form,
   });
 
@@ -111,11 +93,8 @@ export async function uploadAvatar(
 }
 
 /** Удаляет аватар текущего пользователя — профиль возвращается к заглушке. */
-export async function deleteAvatar(token: string): Promise<void> {
-  const res = await fetch(`${API_URL}/users/me/avatar`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function deleteAvatar(): Promise<void> {
+  const res = await authorizedFetch('/users/me/avatar', { method: 'DELETE' });
 
   if (!res.ok) {
     const body: unknown = await res.json().catch(() => null);
@@ -128,14 +107,10 @@ export async function deleteAvatar(token: string): Promise<void> {
 
 /**
  * Скачивает файл аватара с авторизацией и возвращает object URL для использования в <img>.
- * Эндпоинт отдачи аватара требует Bearer-токен, поэтому обычный <img src> не подходит —
- * та же причина, что и у downloadMeetingFile в meeting-file-api.ts.
  * Вызывающий код должен освободить URL через URL.revokeObjectURL при размонтировании.
  */
-export async function getAvatarObjectUrl(token: string): Promise<string> {
-  const res = await fetch(`${API_URL}/users/me/avatar`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function getAvatarObjectUrl(): Promise<string> {
+  const res = await authorizedFetch('/users/me/avatar');
 
   if (!res.ok) {
     throw new ApiError('Не удалось загрузить аватар', res.status);

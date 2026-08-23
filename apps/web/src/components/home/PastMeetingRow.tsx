@@ -9,27 +9,21 @@ import { UsersIcon } from '@/components/icons/UsersIcon';
 
 export function PastMeetingRow({
   meeting,
-  token,
   userId,
   onDeleted,
 }: {
   meeting: Meeting;
-  token: string;
   userId: string | null;
   onDeleted: (meetingId: string) => void;
 }) {
   const { files, loaded, handleDownload, handleDelete, handleUploaded } =
-    useMeetingFiles(token, meeting.id, { autoLoad: true });
+    useMeetingFiles(meeting.id, { autoLoad: true });
 
   return (
     <div className="rounded-xl bg-default p-4">
       <div className="flex items-start justify-between gap-2">
         <p className="font-semibold text-foreground">{meeting.title}</p>
-        <DeleteMeetingButton
-          meeting={meeting}
-          token={token}
-          onDeleted={onDeleted}
-        />
+        <DeleteMeetingButton meeting={meeting} onDeleted={onDeleted} />
       </div>
       <div className="mt-1 flex items-center gap-1.5 text-sm text-muted">
         <IconCalendar className="size-4 shrink-0" />
@@ -56,7 +50,6 @@ export function PastMeetingRow({
           />
 
           <FileUploadForm
-            token={token}
             meetingId={meeting.id}
             filesCount={files.length}
             onUploaded={handleUploaded}

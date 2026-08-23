@@ -15,11 +15,9 @@ import { updateProfileName, type Profile } from '@/lib/profile-api';
 
 /** Форма редактирования имени пользователя на странице профиля. */
 export function ProfileNameForm({
-  token,
   name,
   onUpdated,
 }: {
-  token: string;
   name: string;
   onUpdated: (profile: Profile) => void;
 }) {
@@ -36,7 +34,7 @@ export function ProfileNameForm({
 
     setPending(true);
     try {
-      const updated = await updateProfileName(token, nextName);
+      const updated = await updateProfileName(nextName);
       onUpdated(updated);
     } catch (err) {
       setError(

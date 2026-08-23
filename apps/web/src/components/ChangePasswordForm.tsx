@@ -9,7 +9,7 @@ import { PasswordField } from '@/components/auth/PasswordField';
 const MIN_PASSWORD_LENGTH = 8;
 
 /** Форма смены пароля на странице профиля. */
-export function ChangePasswordForm({ token }: { token: string }) {
+export function ChangePasswordForm() {
   const [isPending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -38,7 +38,7 @@ export function ChangePasswordForm({ token }: { token: string }) {
 
     setPending(true);
     try {
-      await changePassword(token, oldPassword, newPasswordValue);
+      await changePassword(oldPassword, newPasswordValue);
       setSuccess(true);
       setNewPassword('');
       setConfirmPassword('');

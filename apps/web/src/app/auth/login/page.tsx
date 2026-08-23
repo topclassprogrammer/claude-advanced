@@ -15,7 +15,6 @@ import {
   TextField,
 } from '@heroui/react';
 import { ApiError, login } from '@/lib/auth-api';
-import { setAccessToken } from '@/lib/session';
 import { EMAIL_PATTERN } from '@/lib/email-pattern';
 import { AuthFormShell } from '@/components/auth/AuthFormShell';
 import { PasswordField } from '@/components/auth/PasswordField';
@@ -35,8 +34,7 @@ export default function LoginPage() {
 
     setPending(true);
     try {
-      const { accessToken } = await login(email, password);
-      setAccessToken(accessToken);
+      await login(email, password);
       router.push('/');
     } catch (err) {
       setError(

@@ -4,11 +4,9 @@ import { MeetingRow } from './MeetingRow';
 
 export function UpcomingMeetingsSection({
   meetings,
-  token,
   onDeleted,
 }: {
   meetings: Meeting[];
-  token: string;
   onDeleted: (meetingId: string) => void;
 }) {
   if (meetings.length === 0) return null;
@@ -21,12 +19,7 @@ export function UpcomingMeetingsSection({
       </Card.Header>
       <Card.Content className="flex flex-col gap-3">
         {meetings.map((meeting) => (
-          <MeetingRow
-            key={meeting.id}
-            meeting={meeting}
-            token={token}
-            onDeleted={onDeleted}
-          />
+          <MeetingRow key={meeting.id} meeting={meeting} onDeleted={onDeleted} />
         ))}
       </Card.Content>
     </Card>

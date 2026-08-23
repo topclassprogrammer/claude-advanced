@@ -22,6 +22,7 @@ describe('Profile (e2e)', () => {
   const user = { email: 'jane.doe@example.com', password: 'password123' };
 
   let userToken: string;
+  let userRefreshTokenCookie: string | undefined;
 
   const uploadAvatar = (
     token: string,
@@ -59,6 +60,11 @@ describe('Profile (e2e)', () => {
       .send(user)
       .expect(201);
     userToken = (registerRes.body as AuthResponseBody).accessToken;
+    userRefreshTokenCookie = (
+      registerRes.headers['set-cookie'] as unknown as string[] | undefined
+    )
+      ?.find((cookie) => cookie.startsWith('refreshToken='))
+      ?.split(';')[0];
   });
 
   afterEach(async () => {
@@ -285,6 +291,21 @@ describe('Profile (e2e)', () => {
       await request(app.getHttpServer())
         .get('/users/me')
         .set('Authorization', `Bearer ${userToken}`)
+        .expect(401);
+    });
+
+    it('revokes the refresh token so a subsequent refresh fails', async () => {
+      expect(userRefreshTokenCookie).toBeDefined();
+
+      await request(app.getHttpServer())
+        .patch('/users/me/password')
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ oldPassword: user.password, newPassword: 'new-password123' })
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .set('Cookie', userRefreshTokenCookie!)
         .expect(401);
     });
 

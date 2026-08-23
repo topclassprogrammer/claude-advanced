@@ -1,6 +1,4 @@
-import { ApiError } from './auth-api';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+import { ApiError, authorizedFetch } from './auth-api';
 
 export type Meeting = {
   id: string;
@@ -28,10 +26,8 @@ function extractErrorMessage(body: unknown, fallback: string): string {
   return fallback;
 }
 
-export async function getMeetings(token: string): Promise<Meeting[]> {
-  const res = await fetch(`${API_URL}/meetings`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function getMeetings(): Promise<Meeting[]> {
+  const res = await authorizedFetch('/meetings');
 
   const body: unknown = await res.json().catch(() => null);
 
@@ -45,16 +41,10 @@ export async function getMeetings(token: string): Promise<Meeting[]> {
   return body as Meeting[];
 }
 
-export async function createMeeting(
-  token: string,
-  input: CreateMeetingInput,
-): Promise<Meeting> {
-  const res = await fetch(`${API_URL}/meetings`, {
+export async function createMeeting(input: CreateMeetingInput): Promise<Meeting> {
+  const res = await authorizedFetch('/meetings', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ participants: [], ...input }),
   });
 
@@ -71,11 +61,8 @@ export async function createMeeting(
 }
 
 /** Удаляет встречу. Доступно только организатору встречи (403 для остальных на бэкенде). */
-export async function deleteMeeting(token: string, id: string): Promise<void> {
-  const res = await fetch(`${API_URL}/meetings/${id}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function deleteMeeting(id: string): Promise<void> {
+  const res = await authorizedFetch(`/meetings/${id}`, { method: 'DELETE' });
 
   if (!res.ok) {
     const body: unknown = await res.json().catch(() => null);
@@ -86,13 +73,8 @@ export async function deleteMeeting(token: string, id: string): Promise<void> {
   }
 }
 
-export async function getMeetingById(
-  token: string,
-  id: string,
-): Promise<Meeting> {
-  const res = await fetch(`${API_URL}/meetings/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export async function getMeetingById(id: string): Promise<Meeting> {
+  const res = await authorizedFetch(`/meetings/${id}`);
 
   const body: unknown = await res.json().catch(() => null);
 
