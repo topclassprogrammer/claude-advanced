@@ -11,9 +11,27 @@ export class RevokeRefreshTokenHandler implements ICommandHandler<
   constructor(private readonly prisma: PrismaService) {}
 
   async execute({ rawToken }: RevokeRefreshTokenCommand): Promise<void> {
-    await this.prisma.refreshToken.updateMany({
-      where: { tokenHash: hashRefreshToken(rawToken), revokedAt: null },
-      data: { revokedAt: new Date() },
+    const existing = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash: hashRefreshToken(rawToken) },
+      select: { familyId: true },
     });
+    if (!existing) {
+      return;
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.refreshToken.updateMany({
+        where: { familyId: existing.familyId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+      // Закрывает grace period для всей цепочки, включая уже ротированные
+      // (revokedAt не null) строки — иначе токен, ротированный за
+      // последние REUSE_GRACE_PERIOD_MS до logout, всё ещё мог бы выдать
+      // новый живой токен в обход только что выполненного выхода.
+      this.prisma.refreshToken.updateMany({
+        where: { familyId: existing.familyId },
+        data: { familyRevokedAt: new Date() },
+      }),
+    ]);
   }
 }

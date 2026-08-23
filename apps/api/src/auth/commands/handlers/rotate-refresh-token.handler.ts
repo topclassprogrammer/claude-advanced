@@ -54,34 +54,62 @@ export class RotateRefreshTokenHandler implements ICommandHandler<
 
     if (existing.revokedAt) {
       const wasRevokedByRotation = existing.replacedByTokenId !== null;
+      // Явный отзыв (logout/смена пароля/предыдущий детект кражи) ставит
+      // familyRevokedAt разом на всю цепочку — как только он выставлен,
+      // grace period для неё закрыт навсегда, даже если конкретно этот
+      // токен ротировался только что.
+      const familyIntact = existing.familyRevokedAt === null;
       const withinGracePeriod =
         wasRevokedByRotation &&
+        familyIntact &&
         Date.now() - existing.revokedAt.getTime() < REUSE_GRACE_PERIOD_MS;
       if (!withinGracePeriod) {
-        // Либо явно отозван (logout/смена пароля/предыдущий детект кражи),
-        // либо ротирован давно и всё равно предъявляется — похоже на кражу
-        // (скопированная кука и т.п.). Отзываем всю цепочку токенов
-        // пользователя, вынуждая перелогиниться на всех устройствах.
-        await this.prisma.refreshToken.updateMany({
-          where: { userId: existing.userId, revokedAt: null },
-          data: { revokedAt: new Date() },
-        });
+        // Либо явно отозван, либо ротирован давно и всё равно
+        // предъявляется — похоже на кражу (скопированная кука и т.п.).
+        // Отзываем всю цепочку токенов пользователя, вынуждая
+        // перелогиниться на всех устройствах.
+        await this.revokeAllFamiliesOfUser(existing.userId);
         throw new UnauthorizedException('Refresh token reuse detected');
       }
 
       // Токен уже отозван предыдущей ротацией — это толерантный повтор
       // (гонка вкладок), отзывать заново нечего, просто выдаём ещё один
       // валидный дочерний токен от той же цепочки.
-      return this.mintChildToken(existing.userId, existing.user.email);
+      return this.mintChildToken(
+        existing.userId,
+        existing.user.email,
+        existing.familyId,
+      );
     }
 
-    return this.rotate(existing.id, existing.userId, existing.user.email);
+    return this.rotate(
+      existing.id,
+      existing.userId,
+      existing.user.email,
+      existing.familyId,
+    );
+  }
+
+  private async revokeAllFamiliesOfUser(userId: string): Promise<void> {
+    await this.prisma.$transaction([
+      this.prisma.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+      // Закрывает grace period для всех цепочек пользователя целиком,
+      // включая уже ротированные (revokedAt не null) строки.
+      this.prisma.refreshToken.updateMany({
+        where: { userId },
+        data: { familyRevokedAt: new Date() },
+      }),
+    ]);
   }
 
   private async rotate(
     currentTokenId: string,
     userId: string,
     email: string,
+    familyId: string,
   ): Promise<RotatedTokens> {
     const rawRefreshToken = generateRawRefreshToken();
     const newTokenId = randomUUID();
@@ -106,6 +134,7 @@ export class RotateRefreshTokenHandler implements ICommandHandler<
           userId,
           tokenHash: hashRefreshToken(rawRefreshToken),
           expiresAt: new Date(Date.now() + refreshTokenTtlMs()),
+          familyId,
         },
       });
     });
@@ -117,6 +146,7 @@ export class RotateRefreshTokenHandler implements ICommandHandler<
   private async mintChildToken(
     userId: string,
     email: string,
+    familyId: string,
   ): Promise<RotatedTokens> {
     const rawRefreshToken = generateRawRefreshToken();
     await this.prisma.refreshToken.create({
@@ -125,6 +155,7 @@ export class RotateRefreshTokenHandler implements ICommandHandler<
         userId,
         tokenHash: hashRefreshToken(rawRefreshToken),
         expiresAt: new Date(Date.now() + refreshTokenTtlMs()),
+        familyId,
       },
     });
 

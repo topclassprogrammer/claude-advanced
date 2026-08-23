@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { refreshTokenTtlMs } from '../../refresh-token.constants';
@@ -16,11 +17,15 @@ export class IssueRefreshTokenHandler implements ICommandHandler<
 
   async execute({ userId }: IssueRefreshTokenCommand): Promise<string> {
     const rawToken = generateRawRefreshToken();
+    const tokenId = randomUUID();
     await this.prisma.refreshToken.create({
       data: {
+        id: tokenId,
         userId,
         tokenHash: hashRefreshToken(rawToken),
         expiresAt: new Date(Date.now() + refreshTokenTtlMs()),
+        // Корень новой цепочки токенов — сам себе familyId.
+        familyId: tokenId,
       },
     });
 

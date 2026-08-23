@@ -44,11 +44,31 @@ model RefreshToken {
    * применялся только к ротации, а не маскировал реальный logout/revoke.
    */
   replacedByTokenId String?
+  /**
+   * Общий id для всей цепочки токенов, порождённой одним issue
+   * (login/register) — каждая ротация и толерантный grace-period повтор
+   * наследуют его от родителя. Позволяет отозвать разом всю цепочку
+   * (logout/смена пароля/детект кражи) через familyRevokedAt, а не только
+   * строки с revokedAt: null — иначе токен, отозванный ротацией меньше
+   * REUSE_GRACE_PERIOD_MS назад, мог бы породить новую независимую от
+   * отзыва цепочку в обход logout/смены пароля/детекта кражи.
+   */
+  familyId String
+  /**
+   * Ставится разом на все строки цепочки (по familyId, независимо от их
+   * текущего revokedAt) при явном отзыве — logout, смена пароля, детект
+   * кражи. Пока это поле null, недавно ротированный токен (в пределах
+   * REUSE_GRACE_PERIOD_MS) ещё может толерантно выдать дочерний токен;
+   * непустое значение немедленно и необратимо закрывает эту grace-ветку
+   * для всей цепочки.
+   */
+  familyRevokedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+  @@index([familyId])
 }
 
 model Meeting {
