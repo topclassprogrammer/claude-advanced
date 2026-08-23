@@ -10,7 +10,7 @@ export class MulterExceptionFilter implements ExceptionFilter {
     const status = isTooLarge ? 413 : 400;
     const message = isTooLarge
       ? 'File exceeds the maximum allowed size'
-      : exception.message;
+      : 'Invalid file upload';
 
     response.status(status).json({ statusCode: status, message });
   }

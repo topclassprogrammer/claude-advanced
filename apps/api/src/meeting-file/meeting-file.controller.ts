@@ -1,6 +1,5 @@
 import { randomUUID } from 'crypto';
 import { createReadStream } from 'fs';
-import { extname } from 'path';
 import {
   BadRequestException,
   Controller,
@@ -9,6 +8,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Post,
   Res,
   StreamableFile,
@@ -29,7 +29,12 @@ import { DeleteMeetingFileCommand } from './commands/impl/delete-meeting-file.co
 import { UploadMeetingFileCommand } from './commands/impl/upload-meeting-file.command';
 import { buildContentDisposition } from './content-disposition.util';
 import { MulterExceptionFilter } from './filters/multer-exception.filter';
-import { MAX_FILE_SIZE_BYTES, STORAGE_DIR } from './meeting-file.constants';
+import {
+  MAX_FILE_SIZE_BYTES,
+  MIME_TO_EXTENSION,
+  STORAGE_DIR,
+} from './meeting-file.constants';
+import { MeetingFileRecord, toMeetingFileRecord } from './meeting-file.types';
 import { DownloadMeetingFileQuery } from './queries/impl/download-meeting-file.query';
 import { GetMeetingFilesQuery } from './queries/impl/get-meeting-files.query';
 
@@ -48,42 +53,52 @@ export class MeetingFileController {
       storage: diskStorage({
         destination: STORAGE_DIR,
         filename: (_req, file, cb) => {
-          cb(null, `${randomUUID()}${extname(file.originalname)}`);
+          const extension = MIME_TO_EXTENSION[file.mimetype] ?? '';
+          cb(null, `${randomUUID()}${extension}`);
         },
       }),
       limits: { fileSize: MAX_FILE_SIZE_BYTES },
     }),
   )
-  upload(
-    @Param('id') meetingId: string,
+  async upload(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) meetingId: string,
     @UploadedFile() file: Express.Multer.File,
-  ) {
+  ): Promise<MeetingFileRecord> {
     if (!file) {
       throw new BadRequestException('File is required');
     }
 
-    return this.commandBus.execute(
-      new UploadMeetingFileCommand(meetingId, file),
-    );
+    const created = await this.commandBus.execute<
+      UploadMeetingFileCommand,
+      MeetingFile
+    >(new UploadMeetingFileCommand(meetingId, file, user.sub));
+    return toMeetingFileRecord(created);
   }
 
   @Get(':id/files')
-  list(@Param('id') meetingId: string) {
-    return this.queryBus.execute<GetMeetingFilesQuery, MeetingFile[]>(
-      new GetMeetingFilesQuery(meetingId),
-    );
+  async list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) meetingId: string,
+  ): Promise<MeetingFileRecord[]> {
+    const files = await this.queryBus.execute<
+      GetMeetingFilesQuery,
+      MeetingFile[]
+    >(new GetMeetingFilesQuery(meetingId, user.sub));
+    return files.map(toMeetingFileRecord);
   }
 
   @Get(':id/files/:fileId/download')
   async download(
-    @Param('id') meetingId: string,
-    @Param('fileId') fileId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) meetingId: string,
+    @Param('fileId', new ParseUUIDPipe()) fileId: string,
     @Res({ passthrough: true }) res: Response,
   ) {
     const file = await this.queryBus.execute<
       DownloadMeetingFileQuery,
       MeetingFile
-    >(new DownloadMeetingFileQuery(meetingId, fileId));
+    >(new DownloadMeetingFileQuery(meetingId, fileId, user.sub));
     res.set({
       'Content-Type': file.mimeType,
       'Content-Disposition': buildContentDisposition(file.filename),
@@ -95,8 +110,8 @@ export class MeetingFileController {
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') meetingId: string,
-    @Param('fileId') fileId: string,
+    @Param('id', new ParseUUIDPipe()) meetingId: string,
+    @Param('fileId', new ParseUUIDPipe()) fileId: string,
   ) {
     return this.commandBus.execute(
       new DeleteMeetingFileCommand(meetingId, fileId, user.sub),

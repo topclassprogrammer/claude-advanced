@@ -1,6 +1,5 @@
 import { randomUUID } from 'crypto';
 import { createReadStream } from 'fs';
-import { extname } from 'path';
 import {
   BadRequestException,
   Body,
@@ -20,6 +19,7 @@ import {
 } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { diskStorage } from 'multer';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -34,7 +34,11 @@ import { DeleteAvatarCommand } from './commands/impl/delete-avatar.command';
 import { ChangePasswordCommand } from './commands/impl/change-password.command';
 import { UpdateProfileNameDto } from './dto/update-profile-name.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
-import { AVATAR_STORAGE_DIR, MAX_AVATAR_SIZE_BYTES } from './profile.constants';
+import {
+  AVATAR_MIME_TO_EXTENSION,
+  AVATAR_STORAGE_DIR,
+  MAX_AVATAR_SIZE_BYTES,
+} from './profile.constants';
 import type { AvatarFile } from './profile.types';
 
 @UseGuards(JwtAuthGuard)
@@ -61,6 +65,7 @@ export class ProfileController {
   }
 
   @Patch('me/password')
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   changePassword(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: ChangePasswordDto,
@@ -78,7 +83,8 @@ export class ProfileController {
       storage: diskStorage({
         destination: AVATAR_STORAGE_DIR,
         filename: (_req, file, cb) => {
-          cb(null, `${randomUUID()}${extname(file.originalname)}`);
+          const extension = AVATAR_MIME_TO_EXTENSION[file.mimetype] ?? '';
+          cb(null, `${randomUUID()}${extension}`);
         },
       }),
       limits: { fileSize: MAX_AVATAR_SIZE_BYTES },

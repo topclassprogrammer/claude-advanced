@@ -33,7 +33,7 @@ export class ChangePasswordHandler implements ICommandHandler<
     const hashedPassword = await bcrypt.hash(newPassword, PASSWORD_SALT_ROUNDS);
     await this.prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword },
+      data: { password: hashedPassword, passwordChangedAt: new Date() },
     });
   }
 }

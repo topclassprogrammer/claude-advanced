@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -49,13 +50,19 @@ export class MeetingController {
   }
 
   @Get(':id')
-  findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+  findOne(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
     return this.queryBus.execute(new GetMeetingByIdQuery(id, user.sub));
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+  remove(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
     return this.commandBus.execute(new DeleteMeetingCommand(id, user.sub));
   }
 }

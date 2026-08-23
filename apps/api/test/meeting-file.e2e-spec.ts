@@ -122,6 +122,14 @@ describe('MeetingFile (e2e)', () => {
         .expect(404);
     });
 
+    it('returns 403 when requested by a user other than the organizer', async () => {
+      await uploadFile(strangerToken, 'notes.txt', fileContent).expect(403);
+
+      const prisma = app.get(PrismaService);
+      const count = await prisma.meetingFile.count({ where: { meetingId } });
+      expect(count).toBe(0);
+    });
+
     it('adds a second file alongside the first instead of replacing it', async () => {
       const firstRes = await uploadFile(
         ownerToken,
@@ -204,6 +212,13 @@ describe('MeetingFile (e2e)', () => {
         .expect(200);
 
       expect(res.body).toEqual([]);
+    });
+
+    it('returns 403 when requested by a user other than the organizer', async () => {
+      await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/files`)
+        .set('Authorization', `Bearer ${strangerToken}`)
+        .expect(403);
     });
   });
 
@@ -333,6 +348,20 @@ describe('MeetingFile (e2e)', () => {
         )
         .set('Authorization', `Bearer ${ownerToken}`)
         .expect(404);
+    });
+
+    it('returns 403 when requested by a user other than the organizer', async () => {
+      const uploadRes = await uploadFile(
+        ownerToken,
+        'notes.txt',
+        fileContent,
+      ).expect(201);
+      const fileId = (uploadRes.body as MeetingFileResponseBody).id;
+
+      await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/files/${fileId}/download`)
+        .set('Authorization', `Bearer ${strangerToken}`)
+        .expect(403);
     });
   });
 });

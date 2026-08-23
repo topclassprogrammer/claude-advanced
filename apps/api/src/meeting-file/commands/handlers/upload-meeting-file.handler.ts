@@ -2,7 +2,7 @@ import { unlink } from 'fs/promises';
 import {
   BadRequestException,
   ConflictException,
-  HttpException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
@@ -24,33 +24,35 @@ export class UploadMeetingFileHandler implements ICommandHandler<
   async execute({
     meetingId,
     file,
+    requesterId,
   }: UploadMeetingFileCommand): Promise<MeetingFile> {
     const meeting = await this.prisma.meeting.findUnique({
       where: { id: meetingId },
     });
     if (!meeting) {
-      await this.rejectUpload(
-        file.path,
-        new NotFoundException('Meeting not found'),
+      await this.cleanupUpload(file.path);
+      throw new NotFoundException('Meeting not found');
+    }
+
+    if (meeting.organizerId !== requesterId) {
+      await this.cleanupUpload(file.path);
+      throw new ForbiddenException(
+        'Only the meeting organizer can upload files to this meeting',
       );
     }
 
     if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-      await this.rejectUpload(
-        file.path,
-        new BadRequestException('Unsupported file type'),
-      );
+      await this.cleanupUpload(file.path);
+      throw new BadRequestException('Unsupported file type');
     }
 
     const existingCount = await this.prisma.meetingFile.count({
       where: { meetingId },
     });
     if (existingCount >= MAX_FILES_PER_MEETING) {
-      await this.rejectUpload(
-        file.path,
-        new ConflictException(
-          `Meeting already has the maximum number of files (${MAX_FILES_PER_MEETING})`,
-        ),
+      await this.cleanupUpload(file.path);
+      throw new ConflictException(
+        `Meeting already has the maximum number of files (${MAX_FILES_PER_MEETING})`,
       );
     }
 
@@ -68,11 +70,7 @@ export class UploadMeetingFileHandler implements ICommandHandler<
   }
 
   /** Удаляет загруженный multer-ом файл с диска перед отклонением загрузки. */
-  private async rejectUpload(
-    filePath: string,
-    exception: HttpException,
-  ): Promise<never> {
+  private async cleanupUpload(filePath: string): Promise<void> {
     await unlink(filePath).catch(() => undefined);
-    throw exception;
   }
 }

@@ -275,6 +275,19 @@ describe('Profile (e2e)', () => {
         .expect(401);
     });
 
+    it('invalidates the previously issued access token', async () => {
+      await request(app.getHttpServer())
+        .patch('/users/me/password')
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ oldPassword: user.password, newPassword: 'new-password123' })
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .get('/users/me')
+        .set('Authorization', `Bearer ${userToken}`)
+        .expect(401);
+    });
+
     it('rejects the change when the old password is incorrect', async () => {
       await request(app.getHttpServer())
         .patch('/users/me/password')

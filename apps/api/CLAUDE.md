@@ -16,6 +16,18 @@ PostgreSQL поднимается через корневой `docker-compose.ym
 
 Prisma 7 требует driver adapter для SQL-провайдеров: используется `@prisma/adapter-pg` поверх `pg`. Generator сконфигурирован с `moduleFormat = "cjs"` (проект целиком на CommonJS), клиент генерируется в `apps/api/generated/prisma` (не коммитится, генерируется командой `prisma:generate`).
 
+## Безопасность
+
+- Rate limiting — `@nestjs/throttler`, глобальный гвард (`APP_GUARD`) с лимитом по умолчанию 100 запросов/мин; `/auth/register`, `/auth/login` и `PATCH /users/me/password` дополнительно ограничены декоратором `@Throttle` до 5 запросов/мин. В e2e-тестах (`NODE_ENV=test`) throttling отключается целиком (`NoopThrottlerGuard` в `app.module.ts`) — реальные спеки регистрируют по нескольку пользователей с одного IP в `beforeEach` и упёрлись бы в лимит за пару файлов.
+- `main.ts` подключает `helmet()` (security headers, включая `X-Content-Type-Options: nosniff` — значимо для эндпоинтов, отдающих файлы с client-controlled `Content-Type`) и падает при старте, если `WEB_ORIGIN` не задан в `NODE_ENV=production`; CORS ограничен явным списком методов/заголовков.
+- Логин (`LoginHandler`) выполняет `bcrypt.compare` с фиктивным хешем, даже если email не найден — постоянное время ответа не позволяет отличить «нет такого email» от «неверный пароль» (user enumeration через timing).
+- Авторизация файлов встречи симметрична авторизации самой встречи: загрузка/чтение метаданных/скачивание/удаление файлов доступны только организатору встречи (403 для остальных) — как и `GET /meetings/:id`, который 404-ит для не-организатора. Ранее загрузка/чтение/скачивание были открыты любому авторизованному пользователю системы; сужено до организатора как исправление IDOR.
+- Имя файла на диске для файлов встреч и аватаров формируется из `randomUUID()` + расширение, выбранное по allowlist MIME-типа (`MIME_TO_EXTENSION` / `AVATAR_MIME_TO_EXTENSION`), а не из client-controlled `file.originalname` — клиент не может задать произвольное расширение. Полноценная проверка содержимого по magic bytes по-прежнему не реализована (см. gap ниже).
+- Ответы `POST/GET /meetings/:id/files` не содержат `storagePath` (абсолютный путь на диске сервера) — используется `MeetingFileRecord`/`toMeetingFileRecord` (`meeting-file.types.ts`) вместо сырой Prisma-модели.
+- `:id`/`:fileId` в путях `meetings`/`meeting-file` контроллеров проверяются `ParseUUIDPipe` (400 на не-UUID вместо лишнего похода в БД).
+- `ValidationPipe` глобально сконфигурирован с `forbidNonWhitelisted: true` (дополнительно к `whitelist`/`transform`) — неизвестные поля в теле запроса отклоняются 400, а не молча отбрасываются.
+- `MeetingFile.mimeType`/`avatarMimeType` по-прежнему проверяются по заявленному `file.mimetype` от multer (значение из `Content-Type` части multipart-запроса) против allowlist — это значение подделывается клиентом, полноценная проверка по magic bytes не реализована (известный принятый gap безопасности).
+
 ## Тесты
 
 - `npm run test` — unit-тесты (Jest, конфиг в `package.json`, `rootDir: src`, паттерн `*.spec.ts`). На данный момент в проекте нет ни одного unit-спека — команда настроена с флагом `--passWithNoTests` и завершается успешно (код 0), а не падает с "No tests found".
@@ -44,10 +56,10 @@ src/
     commands/impl/create-user.command.ts, commands/handlers/create-user.handler.ts — создание пользователя: проверяет уникальность email (409 `ConflictException` при дубликате), хеширует пароль (bcrypt) и сохраняет через `PrismaService`
     queries/impl/find-user-by-email.query.ts, queries/handlers/find-user-by-email.handler.ts — поиск пользователя по email через `PrismaService`, возвращает `UserRecord | null` (включая хеш пароля — нужен `AuthModule` для проверки при логине)
   auth/
-    auth.module.ts                   — регистрирует CqrsModule, JwtModule (секрет/TTL из ConfigService) и импортирует UsersModule (для общего CommandBus/QueryBus в графе Nest); экспортирует JwtModule и JwtAuthGuard для использования другими модулями
-    auth.controller.ts                — POST /auth/register (CommandBus), POST /auth/login (QueryBus)
+    auth.module.ts                   — регистрирует CqrsModule, JwtModule (секрет валидируется при старте — обязателен, минимум 32 символа, TTL из ConfigService, `signOptions.algorithm: 'HS256'`) и импортирует UsersModule (для общего CommandBus/QueryBus в графе Nest); экспортирует JwtModule и JwtAuthGuard для использования другими модулями
+    auth.controller.ts                — POST /auth/register (CommandBus), POST /auth/login (QueryBus), оба ограничены декоратором `@Throttle` до 5 запросов/мин
     auth-token.service.ts               — общая выдача JWT (payload sub/email), используется обоими хендлерами
-    jwt-auth.guard.ts                    — гвард `JwtAuthGuard`: проверяет Bearer-токен, кладёт payload в `request.user` (401 при отсутствии/невалидности токена)
+    jwt-auth.guard.ts                    — гвард `JwtAuthGuard` (асинхронный): проверяет Bearer-токен (подпись/алгоритм `HS256`/срок действия) и `passwordChangedAt` через `PrismaService`, кладёт payload в `request.user` (401 при отсутствии/невалидности/протухании токена)
     current-user.decorator.ts             — параметр-декоратор `@CurrentUser()`, достаёт `request.user`
     express.d.ts                           — расширение типа `express.Request` полем `user`
     commands/impl/register.command.ts, commands/handlers/register.handler.ts — регистрация: отправляет `CreateUserCommand` в `UsersModule` через `CommandBus`, затем выдаёт JWT
@@ -63,14 +75,14 @@ src/
     dto/create-meeting.dto.ts — class-validator DTO (title, date как ISO8601-строка, description — необязательная строка, participants — массив строк)
   meeting-file/
     meeting-file.module.ts               — импортирует CqrsModule и AuthModule (для JwtAuthGuard)
-    meeting-file.controller.ts             — POST /meetings/:id/files (загрузка), GET /meetings/:id/files (список метаданных, до 10), GET /meetings/:id/files/:fileId/download (скачивание, `StreamableFile`), DELETE /meetings/:id/files/:fileId (204 No Content) — все под `@UseGuards(JwtAuthGuard)`; загрузка/чтение/скачивание доступны любому авторизованному пользователю, удаление — только организатору встречи (403 для остальных)
+    meeting-file.controller.ts             — POST /meetings/:id/files (загрузка), GET /meetings/:id/files (список метаданных, до 10), GET /meetings/:id/files/:fileId/download (скачивание, `StreamableFile`), DELETE /meetings/:id/files/:fileId (204 No Content) — все под `@UseGuards(JwtAuthGuard)`; все операции (загрузка/чтение/скачивание/удаление) доступны только организатору встречи (403 для остальных)
     meeting-file.constants.ts               — `MAX_FILE_SIZE_BYTES` (100 МБ), `MAX_FILES_PER_MEETING` (10), `ALLOWED_MIME_TYPES`, `STORAGE_DIR` (`apps/api/storage/meeting-files`, создаётся при загрузке модуля, в `.gitignore`)
     content-disposition.util.ts              — `buildContentDisposition(filename)` — обёртка над пакетом `content-disposition` (RFC 6266), корректно экранирует спецсимволы и не-ASCII (кириллица) имена файлов
     filters/multer-exception.filter.ts       — `MulterExceptionFilter` (`@Catch(MulterError)`), применяется на `POST :id/files` — превращает multer'овскую `LIMIT_FILE_SIZE` в понятный JSON-ответ 413, остальные multer-ошибки — 400
-    commands/impl/upload-meeting-file.command.ts, commands/handlers/upload-meeting-file.handler.ts — проверяет существование встречи (404), допустимость MIME-типа (400, файл с диска удаляется при отказе) и лимит файлов на встречу (409 `ConflictException`, файл с диска удаляется при отказе, если у встречи уже `MAX_FILES_PER_MEETING` записей `MeetingFile`), затем создаёт новую запись `MeetingFile` (файлы не заменяют друг друга — встреча может иметь до 10 одновременно)
+    commands/impl/upload-meeting-file.command.ts, commands/handlers/upload-meeting-file.handler.ts — проверяет существование встречи (404), что запрашивающий — организатор (403), допустимость MIME-типа (400, файл с диска удаляется при отказе) и лимит файлов на встречу (409 `ConflictException`, файл с диска удаляется при отказе, если у встречи уже `MAX_FILES_PER_MEETING` записей `MeetingFile`), затем создаёт новую запись `MeetingFile` (файлы не заменяют друг друга — встреча может иметь до 10 одновременно)
     commands/impl/delete-meeting-file.command.ts, commands/handlers/delete-meeting-file.handler.ts — удаляет один файл встречи по `fileId`: 404, если встреча не найдена или файл не найден/принадлежит другой встрече; 403, если запрашивающий не организатор встречи; удаляет запись в БД и файл с диска
-    queries/impl/download-meeting-file.query.ts, queries/handlers/download-meeting-file.handler.ts — находит `MeetingFile` по `fileId` (404, если не найден или `meetingId` не совпадает), для скачивания
-    queries/impl/get-meeting-files.query.ts, queries/handlers/get-meeting-files.handler.ts — список `MeetingFile` по `meetingId`, отсортированный по `uploadedAt` по убыванию (самые новые первыми); пустой список, если файлов нет
+    queries/impl/download-meeting-file.query.ts, queries/handlers/download-meeting-file.handler.ts — проверяет, что встреча существует и запрашивающий — организатор (иначе 404/403), затем находит `MeetingFile` по `fileId` (404, если не найден или `meetingId` не совпадает), для скачивания
+    queries/impl/get-meeting-files.query.ts, queries/handlers/get-meeting-files.handler.ts — проверяет, что встреча существует и запрашивающий — организатор (иначе 404/403), затем список `MeetingFile` по `meetingId`, отсортированный по `uploadedAt` по убыванию (самые новые первыми); пустой список, если файлов нет
   profile/
     profile.module.ts                 — импортирует CqrsModule и AuthModule (для JwtAuthGuard)
     profile.controller.ts               — GET /users/me, PATCH /users/me/name, PATCH /users/me/password, POST /users/me/avatar (загрузка/замена, `FileInterceptor('avatar')`), DELETE /users/me/avatar, GET /users/me/avatar (отдача файла, `StreamableFile`) — все под `@UseGuards(JwtAuthGuard)`; загрузка переиспользует `MulterExceptionFilter` из `meeting-file/filters` (413 при превышении `MAX_AVATAR_SIZE_BYTES`)
@@ -87,8 +99,8 @@ src/
 test/
   auth.e2e-spec.ts             — e2e-тесты /auth/register и /auth/login (используют реальную БД, очищают таблицу User в beforeEach)
   meeting.e2e-spec.ts          — e2e-тесты /meetings (используют реальную БД, очищают таблицы Meeting и User в beforeEach; проверяют изоляцию встреч между пользователями)
-  meeting-file.e2e-spec.ts     — e2e-тесты загрузки/списка/скачивания/удаления файлов встречи, включая лимит 10 файлов на встречу (409 на 11-й) и выборочное удаление одного файла (используют реальную БД, очищают таблицы MeetingFile, Meeting и User в beforeEach)
-  profile.e2e-spec.ts          — e2e-тесты GET /users/me, PATCH /users/me/name, PATCH /users/me/password (включая отклонение неверного старого пароля и логин новым паролем после смены) и загрузки/замены/удаления/отдачи аватара (POST/DELETE/GET /users/me/avatar, включая отклонение недопустимого MIME-типа и файла > 5 МБ, замену с удалением старого файла с диска, `avatarUrl` в ответе `GET /users/me`) — используют реальную БД, очищают таблицы Meeting и User в beforeEach
+  meeting-file.e2e-spec.ts     — e2e-тесты загрузки/списка/скачивания/удаления файлов встречи, включая лимит 10 файлов на встречу (409 на 11-й), выборочное удаление одного файла и 403 для не-организатора на всех четырёх операциях (используют реальную БД, очищают таблицы MeetingFile, Meeting и User в beforeEach)
+  profile.e2e-spec.ts          — e2e-тесты GET /users/me, PATCH /users/me/name, PATCH /users/me/password (включая отклонение неверного старого пароля, логин новым паролем после смены и инвалидацию ранее выданного access-токена) и загрузки/замены/удаления/отдачи аватара (POST/DELETE/GET /users/me/avatar, включая отклонение недопустимого MIME-типа и файла > 5 МБ, замену с удалением старого файла с диска, `avatarUrl` в ответе `GET /users/me`) — используют реальную БД, очищают таблицы Meeting и User в beforeEach
   jest-e2e.json                 — конфиг Jest для e2e
 ```
 
@@ -129,7 +141,7 @@ test/
 - Роуты `/meetings/*` требуют заголовок `Authorization: Bearer <accessToken>` (проверяется `JwtAuthGuard` из `AuthModule`); `Meeting.organizerId` имеет `onDelete: Cascade` на связи с `User`, чтобы удаление пользователя не оставляло висящих встреч и не ломало очистку таблиц в e2e-тестах.
 - После изменения `prisma/schema.prisma` — прогонять `npm run prisma:migrate:dev` (создаёт и применяет миграцию) и `npm run prisma:generate`.
 - `MeetingFile.mimeType` проверяется по заявленному `file.mimetype` от multer (значение из `Content-Type` части multipart-запроса) против allowlist в `meeting-file.constants.ts` — это значение подделывается клиентом, полноценная проверка по magic bytes не реализована (известный gap безопасности). Реализуя/меняя загрузку файлов — используй @docs/research-meeting-file-upload.md (там же §1 про этот gap).
-- Авторизация на файл встречи асимметрична: загрузка/чтение метаданных/скачивание доступны любому авторизованному пользователю системы (по PRD), удаление — только организатору встречи (403 для остальных, `DeleteMeetingFileHandler` сверяет `Meeting.organizerId` с `requesterId` из JWT).
+- Авторизация на файл встречи симметрична авторизации самой встречи: загрузка/чтение метаданных/скачивание/удаление доступны только организатору встречи (403 для остальных, каждый хендлер сверяет `Meeting.organizerId` с `requesterId` из JWT).
 
 ## Поддержка документации в актуальном состоянии
 
