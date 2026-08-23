@@ -5,8 +5,11 @@ import {
   deleteMeetingFile,
   downloadMeetingFile,
   getMeetingFiles,
+  isTranscriptionInProgress,
   type MeetingFile,
 } from '@/lib/meeting-file-api';
+
+const TRANSCRIPTION_POLL_INTERVAL_MS = 4000;
 
 export function useMeetingFiles(
   meetingId: string,
@@ -30,6 +33,18 @@ export function useMeetingFiles(
       .then(setFiles)
       .finally(() => setLoaded(true));
   }, [autoLoad, meetingId]);
+
+  useEffect(() => {
+    if (!files.some(isTranscriptionInProgress)) return;
+
+    const intervalId = setInterval(() => {
+      getMeetingFiles(meetingId)
+        .then(setFiles)
+        .catch(() => undefined);
+    }, TRANSCRIPTION_POLL_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [files, meetingId]);
 
   const handleDownload = async (file: MeetingFile): Promise<void> => {
     await downloadMeetingFile(meetingId, file.id, file.filename);

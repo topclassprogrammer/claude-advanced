@@ -2,6 +2,17 @@ import { ApiError, authorizedFetch, getAccessToken } from './auth-api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
+export type TranscriptionStatus =
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'COMPLETED'
+  | 'FAILED';
+
+export type MeetingFileTranscription = {
+  status: TranscriptionStatus;
+  text: string | null;
+};
+
 export type MeetingFile = {
   id: string;
   meetingId: string;
@@ -9,7 +20,16 @@ export type MeetingFile = {
   size: number;
   mimeType: string;
   uploadedAt: string;
+  transcription: MeetingFileTranscription | null;
 };
+
+/** Файл ещё ожидает или проходит транскрибацию — актуальный статус нужно поллить. */
+export function isTranscriptionInProgress(file: MeetingFile): boolean {
+  return (
+    file.transcription?.status === 'PENDING' ||
+    file.transcription?.status === 'PROCESSING'
+  );
+}
 
 function extractErrorMessage(body: unknown, fallback: string): string {
   if (body && typeof body === 'object' && 'message' in body) {

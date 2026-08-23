@@ -1,13 +1,45 @@
 'use client';
 
 import { useState } from 'react';
-import { Alert, Button, Card, EmptyState } from '@heroui/react';
-import type { MeetingFile } from '@/lib/meeting-file-api';
+import { Alert, Button, Card, Chip, Disclosure, EmptyState } from '@heroui/react';
+import type { MeetingFile, TranscriptionStatus } from '@/lib/meeting-file-api';
 import { MAX_FILES_PER_MEETING } from '@/lib/meeting-file-constraints';
 import { getFileIcon } from '@/lib/file-icon';
 import { ConfirmDeleteDialog } from '@/components/common/ConfirmDeleteDialog';
 import { DownloadIcon } from '@/components/icons/DownloadIcon';
 import { TrashIcon } from '@/components/icons/TrashIcon';
+
+const TRANSCRIPTION_STATUS_LABEL: Record<TranscriptionStatus, string> = {
+  PENDING: 'В процессе',
+  PROCESSING: 'В процессе',
+  COMPLETED: 'Готово',
+  FAILED: 'Ошибка',
+};
+
+const TRANSCRIPTION_STATUS_COLOR: Record<
+  TranscriptionStatus,
+  'warning' | 'success' | 'danger'
+> = {
+  PENDING: 'warning',
+  PROCESSING: 'warning',
+  COMPLETED: 'success',
+  FAILED: 'danger',
+};
+
+function TranscriptionStatusChip({ status }: { status: TranscriptionStatus }) {
+  return (
+    <div aria-live="polite">
+      <Chip
+        color={TRANSCRIPTION_STATUS_COLOR[status]}
+        variant="soft"
+        size="sm"
+        data-testid="transcription-status-chip"
+      >
+        Транскрипт: {TRANSCRIPTION_STATUS_LABEL[status]}
+      </Chip>
+    </div>
+  );
+}
 
 const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
   dateStyle: 'medium',
@@ -77,6 +109,11 @@ function FileRow({
           <p className="text-sm text-muted">
             {formatFileSize(file.size)} · {formatUploadedAt(file.uploadedAt)}
           </p>
+          {file.transcription ? (
+            <div className="mt-2">
+              <TranscriptionStatusChip status={file.transcription.status} />
+            </div>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Button onPress={handleDownload} isDisabled={downloading}>
@@ -103,6 +140,27 @@ function FileRow({
             <Alert.Description>{error}</Alert.Description>
           </Alert.Content>
         </Alert>
+      ) : null}
+
+      {file.transcription?.status === 'COMPLETED' && file.transcription.text ? (
+        <Disclosure.Root className="rounded-xl bg-default px-4">
+          <Disclosure.Heading>
+            <Disclosure.Trigger>
+              Транскрипт
+              <Disclosure.Indicator />
+            </Disclosure.Trigger>
+          </Disclosure.Heading>
+          <Disclosure.Content>
+            <Disclosure.Body>
+              <p
+                className="whitespace-pre-wrap text-sm text-foreground"
+                data-testid="transcription-text"
+              >
+                {file.transcription.text}
+              </p>
+            </Disclosure.Body>
+          </Disclosure.Content>
+        </Disclosure.Root>
       ) : null}
 
       <ConfirmDeleteDialog
