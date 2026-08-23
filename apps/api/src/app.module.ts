@@ -10,6 +10,7 @@ import { APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import cookieParser from 'cookie-parser';
+import { isProductionLikeEnv } from './config/env.util';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { MeetingModule } from './meeting/meeting.module';
@@ -17,11 +18,12 @@ import { MeetingFileModule } from './meeting-file/meeting-file.module';
 import { ProfileModule } from './profile/profile.module';
 
 /**
- * Throttling включён только при NODE_ENV=production. И Jest e2e-тесты
- * apps/api (регистрируют нескольких пользователей с одного IP в beforeEach),
- * и Playwright e2e apps/web (fullyParallel — параллельные регистрации со
- * многих воркеров) в реалистичном сценарии за пару тестовых файлов ложатся
- * на лимит auth-роутов, если throttling активен в dev/test-режиме.
+ * Throttling отключён только при явном NODE_ENV=development/test (fail-closed:
+ * незаданный/опечатанный NODE_ENV на проде не должен тихо отключать защиту).
+ * И Jest e2e-тесты apps/api (регистрируют нескольких пользователей с одного
+ * IP в beforeEach), и Playwright e2e apps/web (fullyParallel — параллельные
+ * регистрации со многих воркеров) в реалистичном сценарии за пару тестовых
+ * файлов ложатся на лимит auth-роутов, если throttling активен в dev/test-режиме.
  */
 @Injectable()
 class NoopThrottlerGuard implements CanActivate {
@@ -30,7 +32,7 @@ class NoopThrottlerGuard implements CanActivate {
   }
 }
 
-const throttlingEnabled = process.env.NODE_ENV === 'production';
+const throttlingEnabled = isProductionLikeEnv();
 
 @Module({
   imports: [

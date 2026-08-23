@@ -68,6 +68,11 @@ export class RotateRefreshTokenHandler implements ICommandHandler<
         });
         throw new UnauthorizedException('Refresh token reuse detected');
       }
+
+      // Токен уже отозван предыдущей ротацией — это толерантный повтор
+      // (гонка вкладок), отзывать заново нечего, просто выдаём ещё один
+      // валидный дочерний токен от той же цепочки.
+      return this.mintChildToken(existing.userId, existing.user.email);
     }
 
     return this.rotate(existing.id, existing.userId, existing.user.email);
@@ -80,20 +85,48 @@ export class RotateRefreshTokenHandler implements ICommandHandler<
   ): Promise<RotatedTokens> {
     const rawRefreshToken = generateRawRefreshToken();
     const newTokenId = randomUUID();
-    await this.prisma.$transaction([
-      this.prisma.refreshToken.create({
+
+    await this.prisma.$transaction(async (tx) => {
+      // Отзываем старый токен первым и проверяем, что это именно мы его
+      // отозвали (count === 0 означает, что параллельный запрос уже успел
+      // ротировать этот же токен) — иначе одна украденная/скопированная
+      // кука может форкнуться в две независимые живые цепочки токенов,
+      // невидимые для reuse-detection.
+      const { count } = await tx.refreshToken.updateMany({
+        where: { id: currentTokenId, revokedAt: null },
+        data: { revokedAt: new Date(), replacedByTokenId: newTokenId },
+      });
+      if (count === 0) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      await tx.refreshToken.create({
         data: {
           id: newTokenId,
           userId,
           tokenHash: hashRefreshToken(rawRefreshToken),
           expiresAt: new Date(Date.now() + refreshTokenTtlMs()),
         },
-      }),
-      this.prisma.refreshToken.updateMany({
-        where: { id: currentTokenId, revokedAt: null },
-        data: { revokedAt: new Date(), replacedByTokenId: newTokenId },
-      }),
-    ]);
+      });
+    });
+
+    const { accessToken } = this.authTokenService.sign(userId, email);
+    return { accessToken, rawRefreshToken };
+  }
+
+  private async mintChildToken(
+    userId: string,
+    email: string,
+  ): Promise<RotatedTokens> {
+    const rawRefreshToken = generateRawRefreshToken();
+    await this.prisma.refreshToken.create({
+      data: {
+        id: randomUUID(),
+        userId,
+        tokenHash: hashRefreshToken(rawRefreshToken),
+        expiresAt: new Date(Date.now() + refreshTokenTtlMs()),
+      },
+    });
 
     const { accessToken } = this.authTokenService.sign(userId, email);
     return { accessToken, rawRefreshToken };

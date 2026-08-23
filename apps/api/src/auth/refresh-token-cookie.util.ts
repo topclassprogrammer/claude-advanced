@@ -1,4 +1,5 @@
 import { CookieOptions, Response } from 'express';
+import { isProductionLikeEnv } from '../config/env.util';
 import {
   REFRESH_TOKEN_COOKIE,
   refreshTokenTtlMs,
@@ -10,7 +11,8 @@ function baseCookieOptions(): CookieOptions {
   return {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    // Fail-closed: Secure выключен только при явном NODE_ENV=development/test.
+    secure: isProductionLikeEnv(),
     // Кука нужна только эндпоинтам ротации/логаута — незачем отправлять её
     // на каждый обычный запрос к API (access-токен теперь только в
     // заголовке Authorization, не в куке).
