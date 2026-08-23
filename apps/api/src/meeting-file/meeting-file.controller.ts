@@ -34,7 +34,11 @@ import {
   MIME_TO_EXTENSION,
   STORAGE_DIR,
 } from './meeting-file.constants';
-import { MeetingFileRecord, toMeetingFileRecord } from './meeting-file.types';
+import {
+  MeetingFileRecord,
+  MeetingFileWithTranscription,
+  toMeetingFileRecord,
+} from './meeting-file.types';
 import { DownloadMeetingFileQuery } from './queries/impl/download-meeting-file.query';
 import { GetMeetingFilesQuery } from './queries/impl/get-meeting-files.query';
 
@@ -71,7 +75,7 @@ export class MeetingFileController {
 
     const created = await this.commandBus.execute<
       UploadMeetingFileCommand,
-      MeetingFile
+      MeetingFileWithTranscription
     >(new UploadMeetingFileCommand(meetingId, file, user.sub));
     return toMeetingFileRecord(created);
   }
@@ -83,7 +87,7 @@ export class MeetingFileController {
   ): Promise<MeetingFileRecord[]> {
     const files = await this.queryBus.execute<
       GetMeetingFilesQuery,
-      MeetingFile[]
+      MeetingFileWithTranscription[]
     >(new GetMeetingFilesQuery(meetingId, user.sub));
     return files.map(toMeetingFileRecord);
   }

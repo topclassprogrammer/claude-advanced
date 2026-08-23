@@ -87,15 +87,36 @@ model Meeting {
 }
 
 model MeetingFile {
-  id          String   @id @default(uuid())
-  meetingId   String
-  meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  filename    String
-  size        Int
-  mimeType    String
-  storagePath String
-  uploadedAt  DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String                    @id @default(uuid())
+  meetingId     String
+  meeting       Meeting                   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  filename      String
+  size          Int
+  mimeType      String
+  storagePath   String
+  uploadedAt    DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+  transcription MeetingFileTranscription?
 
   @@index([meetingId])
+}
+
+enum TranscriptionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model MeetingFileTranscription {
+  id            String              @id @default(uuid())
+  meetingFileId String              @unique
+  meetingFile   MeetingFile         @relation(fields: [meetingFileId], references: [id], onDelete: Cascade)
+  status        TranscriptionStatus @default(PENDING)
+  text          String?
+  errorMessage  String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([meetingFileId])
 }

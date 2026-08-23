@@ -5,27 +5,33 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
-import { MeetingFile } from '../../../../generated/prisma/client';
+import { CommandBus, CommandHandler, ICommandHandler } from '@nestjs/cqrs';
+import { MeetingFileTranscription } from '../../../../generated/prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { StartMeetingFileTranscriptionCommand } from '../../../transcription/commands/impl/start-meeting-file-transcription.command';
+import { TRANSCRIBABLE_MIME_TYPES } from '../../../transcription/transcription.constants';
 import {
   ALLOWED_MIME_TYPES,
   MAX_FILES_PER_MEETING,
 } from '../../meeting-file.constants';
+import { MeetingFileWithTranscription } from '../../meeting-file.types';
 import { UploadMeetingFileCommand } from '../impl/upload-meeting-file.command';
 
 @CommandHandler(UploadMeetingFileCommand)
 export class UploadMeetingFileHandler implements ICommandHandler<
   UploadMeetingFileCommand,
-  MeetingFile
+  MeetingFileWithTranscription
 > {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly commandBus: CommandBus,
+  ) {}
 
   async execute({
     meetingId,
     file,
     requesterId,
-  }: UploadMeetingFileCommand): Promise<MeetingFile> {
+  }: UploadMeetingFileCommand): Promise<MeetingFileWithTranscription> {
     const meeting = await this.prisma.meeting.findUnique({
       where: { id: meetingId },
     });
@@ -58,7 +64,7 @@ export class UploadMeetingFileHandler implements ICommandHandler<
 
     const filename = Buffer.from(file.originalname, 'latin1').toString('utf8');
 
-    return this.prisma.meetingFile.create({
+    const meetingFile = await this.prisma.meetingFile.create({
       data: {
         meetingId,
         filename,
@@ -67,6 +73,29 @@ export class UploadMeetingFileHandler implements ICommandHandler<
         storagePath: file.path,
       },
     });
+
+    const transcription = await this.startTranscriptionIfSupported(
+      meetingFile.id,
+      meetingFile.mimeType,
+      meetingFile.storagePath,
+    );
+
+    return { ...meetingFile, transcription };
+  }
+
+  private async startTranscriptionIfSupported(
+    meetingFileId: string,
+    mimeType: string,
+    storagePath: string,
+  ): Promise<MeetingFileTranscription | null> {
+    if (!TRANSCRIBABLE_MIME_TYPES.includes(mimeType)) {
+      return null;
+    }
+
+    return this.commandBus.execute<
+      StartMeetingFileTranscriptionCommand,
+      MeetingFileTranscription
+    >(new StartMeetingFileTranscriptionCommand(meetingFileId, storagePath));
   }
 
   /** Удаляет загруженный multer-ом файл с диска перед отклонением загрузки. */
