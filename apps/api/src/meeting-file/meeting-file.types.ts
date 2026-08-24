@@ -3,12 +3,18 @@ import {
   MeetingFileTranscription,
 } from '../../generated/prisma/client';
 import {
+  MeetingFileSummaryRecord,
+  MeetingFileSummaryWithActionItems,
+  toMeetingFileSummaryRecord,
+} from '../summary/summary.types';
+import {
   MeetingFileTranscriptionRecord,
   toMeetingFileTranscriptionRecord,
 } from '../transcription/transcription.types';
 
 export type MeetingFileWithTranscription = MeetingFile & {
   transcription?: MeetingFileTranscription | null;
+  summary?: MeetingFileSummaryWithActionItems | null;
 };
 
 /** Публичное представление MeetingFile — без storagePath (абсолютный путь на диске сервера). */
@@ -20,6 +26,7 @@ export interface MeetingFileRecord {
   mimeType: string;
   uploadedAt: Date;
   transcription: MeetingFileTranscriptionRecord | null;
+  summary: MeetingFileSummaryRecord | null;
 }
 
 export function toMeetingFileRecord(
@@ -35,5 +42,6 @@ export function toMeetingFileRecord(
     transcription: file.transcription
       ? toMeetingFileTranscriptionRecord(file.transcription)
       : null,
+    summary: file.summary ? toMeetingFileSummaryRecord(file.summary) : null,
   };
 }

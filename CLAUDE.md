@@ -5,7 +5,7 @@ An npm workspaces monorepo with two applications:
 - `apps/web` — frontend on Next.js (React 19). See `apps/web/CLAUDE.md`.
 - `apps/api` — backend on NestJS. See `apps/api/CLAUDE.md`.
 
-`apps/api` implements an auth module (register/login, JWT), a meetings module (create, list), a meeting files module (upload/download/metadata/delete) and, for mp4/mp3 meeting files, automatic local Whisper transcription (status + text exposed alongside file metadata) on top of PostgreSQL — details in `apps/api/CLAUDE.md`. `apps/web` implements login (`/auth/login`) and registration (`/auth/register`) pages, a home page (`/`) with the current user's meeting list, and a meeting page (`/meetings/[id]`) with an attached-file card — details in `apps/web/CLAUDE.md`.
+`apps/api` implements an auth module (register/login, JWT), a meetings module (create, list), a meeting files module (upload/download/metadata/delete) and, for mp4/mp3 meeting files, automatic local Whisper transcription (status + text exposed alongside file metadata) followed by automatic Claude-based meeting summary generation (summary, action items, decisions — status + content exposed alongside file metadata, organizer-only) on top of PostgreSQL — details in `apps/api/CLAUDE.md`. `apps/web` implements login (`/auth/login`) and registration (`/auth/register`) pages, a home page (`/`) with the current user's meeting list, and a meeting page (`/meetings/[id]`) with an attached-file card — details in `apps/web/CLAUDE.md`.
 
 ## Обязательно для каждого метода сервиса
 
