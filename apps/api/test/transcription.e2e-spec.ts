@@ -4,6 +4,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from './../src/prisma/prisma.service';
+import { CLAUDE_SUMMARY_SERVICE } from './../src/summary/claude-summary.service';
 import { WHISPER_TRANSCRIPTION_SERVICE } from './../src/transcription/whisper-transcription.service';
 
 interface AuthResponseBody {
@@ -35,6 +36,18 @@ class FakeWhisperTranscriptionService {
       return Promise.reject(new Error('whisper crashed'));
     }
     return Promise.resolve(FAKE_TRANSCRIPT);
+  }
+}
+
+/**
+ * Успешная транскрибация автозапускает генерацию выжимки (см.
+ * SummaryModule); этот тестовый файл её не проверяет (см.
+ * summary.e2e-spec.ts), но без фейка реальный AnthropicSummaryService
+ * пытался бы обратиться к Claude API в фоне после закрытия приложения.
+ */
+class FakeClaudeSummaryService {
+  generateSummary() {
+    return Promise.resolve({ summary: '', actionItems: [], decisions: [] });
   }
 }
 
@@ -105,12 +118,16 @@ describe('Transcription (e2e)', () => {
     })
       .overrideProvider(WHISPER_TRANSCRIPTION_SERVICE)
       .useValue(fakeWhisper)
+      .overrideProvider(CLAUDE_SUMMARY_SERVICE)
+      .useClass(FakeClaudeSummaryService)
       .compile();
 
     app = moduleFixture.createNestApplication();
     await app.init();
 
     const prisma = app.get(PrismaService);
+    await prisma.summaryActionItem.deleteMany();
+    await prisma.meetingFileSummary.deleteMany();
     await prisma.meetingFileTranscription.deleteMany();
     await prisma.meetingFile.deleteMany();
     await prisma.meeting.deleteMany();

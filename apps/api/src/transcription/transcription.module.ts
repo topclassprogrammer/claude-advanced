@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { CqrsModule } from '@nestjs/cqrs';
+import { SummaryModule } from '../summary/summary.module';
 import { ProcessMeetingFileTranscriptionHandler } from './commands/handlers/process-meeting-file-transcription.handler';
 import { StartMeetingFileTranscriptionHandler } from './commands/handlers/start-meeting-file-transcription.handler';
 import { LocalWhisperTranscriptionService } from './local-whisper-transcription.service';
@@ -11,7 +12,7 @@ const CommandHandlers = [
 ];
 
 @Module({
-  imports: [CqrsModule],
+  imports: [CqrsModule, SummaryModule],
   providers: [
     ...CommandHandlers,
     {
