@@ -6,7 +6,10 @@ import {
   ClaudeSummaryService,
   GeneratedSummary,
 } from './claude-summary.service';
-import { CLAUDE_SUMMARY_MODEL, SUMMARY_SYSTEM_PROMPT } from './summary.constants';
+import {
+  CLAUDE_SUMMARY_MODEL,
+  SUMMARY_SYSTEM_PROMPT,
+} from './summary.constants';
 
 const SummaryOutputSchema = z.object({
   summary: z.string(),
