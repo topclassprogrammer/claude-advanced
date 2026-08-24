@@ -312,7 +312,15 @@ describe('Summary (e2e)', () => {
     expect(file?.transcription?.text).toBe(FAKE_TRANSCRIPT);
   });
 
-  it('reaches COMPLETED for a transcript exceeding the model context window', async () => {
+  /**
+   * FakeClaudeSummaryService stands in for the whole ClaudeSummaryService
+   * (including AnthropicSummaryService's transcript truncation), so this
+   * cannot exercise truncation itself — that's covered at the unit level in
+   * anthropic-summary.service.spec.ts. This checks that the rest of the
+   * pipeline (transcript persistence, command payload passing, DB writes)
+   * doesn't choke on a transcript far longer than a typical meeting.
+   */
+  it('reaches COMPLETED end-to-end for an oversized transcript', async () => {
     const hugeTranscript = 'word '.repeat(50_000);
     fakeWhisper.transcribe = () => Promise.resolve(hugeTranscript);
 
@@ -323,7 +331,8 @@ describe('Summary (e2e)', () => {
     ).expect(201);
     const fileId = (res.body as MeetingFileResponseBody).id;
 
-    await waitForTranscriptionSettled(fileId);
+    const transcription = await waitForTranscriptionSettled(fileId);
+    expect(transcription.text).toBe(hugeTranscript);
     const summary = await waitForSummarySettled(fileId);
 
     expect(summary.status).toBe('COMPLETED');
