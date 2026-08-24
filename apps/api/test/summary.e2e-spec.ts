@@ -253,7 +253,11 @@ describe('Summary (e2e)', () => {
   });
 
   it('reaches COMPLETED with explicit empty lists when there are no action items or decisions', async () => {
-    fakeClaude.result = { summary: 'Quick sync, nothing else.', actionItems: [], decisions: [] };
+    fakeClaude.result = {
+      summary: 'Quick sync, nothing else.',
+      actionItems: [],
+      decisions: [],
+    };
 
     const res = await uploadFile(
       ownerToken,
@@ -286,6 +290,52 @@ describe('Summary (e2e)', () => {
     expect(summary.status).toBe('FAILED');
     expect(summary.summary).toBeNull();
     expect(summary.actionItems).toEqual([]);
+  });
+
+  it('keeps the transcript text and a working file list after the summary fails', async () => {
+    fakeClaude.shouldFail = true;
+
+    const res = await uploadFile(
+      ownerToken,
+      'recording.mp3',
+      'audio/mpeg',
+    ).expect(201);
+    const fileId = (res.body as MeetingFileResponseBody).id;
+
+    await waitForTranscriptionSettled(fileId);
+    const summary = await waitForSummarySettled(fileId);
+    expect(summary.status).toBe('FAILED');
+
+    const files = await getFiles();
+    const file = files.find((candidate) => candidate.id === fileId);
+    expect(file?.transcription?.status).toBe('COMPLETED');
+    expect(file?.transcription?.text).toBe(FAKE_TRANSCRIPT);
+  });
+
+  /**
+   * FakeClaudeSummaryService stands in for the whole ClaudeSummaryService
+   * (including AnthropicSummaryService's transcript truncation), so this
+   * cannot exercise truncation itself — that's covered at the unit level in
+   * anthropic-summary.service.spec.ts. This checks that the rest of the
+   * pipeline (transcript persistence, command payload passing, DB writes)
+   * doesn't choke on a transcript far longer than a typical meeting.
+   */
+  it('reaches COMPLETED end-to-end for an oversized transcript', async () => {
+    const hugeTranscript = 'word '.repeat(50_000);
+    fakeWhisper.transcribe = () => Promise.resolve(hugeTranscript);
+
+    const res = await uploadFile(
+      ownerToken,
+      'recording.mp3',
+      'audio/mpeg',
+    ).expect(201);
+    const fileId = (res.body as MeetingFileResponseBody).id;
+
+    const transcription = await waitForTranscriptionSettled(fileId);
+    expect(transcription.text).toBe(hugeTranscript);
+    const summary = await waitForSummarySettled(fileId);
+
+    expect(summary.status).toBe('COMPLETED');
   });
 
   it('does not start summary generation when the transcription fails', async () => {
