@@ -1,45 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { Alert, Button, Card, Chip, Disclosure, EmptyState } from '@heroui/react';
-import type { MeetingFile, TranscriptionStatus } from '@/lib/meeting-file-api';
+import { Alert, Button, Card, Disclosure, EmptyState } from '@heroui/react';
+import type { MeetingFile } from '@/lib/meeting-file-api';
 import { MAX_FILES_PER_MEETING } from '@/lib/meeting-file-constraints';
 import { getFileIcon } from '@/lib/file-icon';
 import { ConfirmDeleteDialog } from '@/components/common/ConfirmDeleteDialog';
+import { StatusChip } from '@/components/common/StatusChip';
+import { FileSummaryDisclosure } from '@/components/FileSummaryDisclosure';
 import { DownloadIcon } from '@/components/icons/DownloadIcon';
 import { TrashIcon } from '@/components/icons/TrashIcon';
-
-const TRANSCRIPTION_STATUS_LABEL: Record<TranscriptionStatus, string> = {
-  PENDING: 'В процессе',
-  PROCESSING: 'В процессе',
-  COMPLETED: 'Готово',
-  FAILED: 'Ошибка',
-};
-
-const TRANSCRIPTION_STATUS_COLOR: Record<
-  TranscriptionStatus,
-  'warning' | 'success' | 'danger'
-> = {
-  PENDING: 'warning',
-  PROCESSING: 'warning',
-  COMPLETED: 'success',
-  FAILED: 'danger',
-};
-
-function TranscriptionStatusChip({ status }: { status: TranscriptionStatus }) {
-  return (
-    <div aria-live="polite">
-      <Chip
-        color={TRANSCRIPTION_STATUS_COLOR[status]}
-        variant="soft"
-        size="sm"
-        data-testid="transcription-status-chip"
-      >
-        Транскрипт: {TRANSCRIPTION_STATUS_LABEL[status]}
-      </Chip>
-    </div>
-  );
-}
 
 const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
   dateStyle: 'medium',
@@ -109,9 +79,22 @@ function FileRow({
           <p className="text-sm text-muted">
             {formatFileSize(file.size)} · {formatUploadedAt(file.uploadedAt)}
           </p>
-          {file.transcription ? (
-            <div className="mt-2">
-              <TranscriptionStatusChip status={file.transcription.status} />
+          {file.transcription || file.summary ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {file.transcription ? (
+                <StatusChip
+                  prefix="Транскрипт"
+                  status={file.transcription.status}
+                  testId="transcription-status-chip"
+                />
+              ) : null}
+              {file.summary ? (
+                <StatusChip
+                  prefix="Выжимка"
+                  status={file.summary.status}
+                  testId="summary-status-chip"
+                />
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -161,6 +144,10 @@ function FileRow({
             </Disclosure.Body>
           </Disclosure.Content>
         </Disclosure.Root>
+      ) : null}
+
+      {file.summary?.status === 'COMPLETED' ? (
+        <FileSummaryDisclosure summary={file.summary} />
       ) : null}
 
       <ConfirmDeleteDialog

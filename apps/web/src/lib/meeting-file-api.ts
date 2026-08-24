@@ -13,6 +13,20 @@ export type MeetingFileTranscription = {
   text: string | null;
 };
 
+export type SummaryStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+
+export type MeetingFileActionItem = {
+  text: string;
+  assignee: string | null;
+};
+
+export type MeetingFileSummary = {
+  status: SummaryStatus;
+  summary: string | null;
+  actionItems: MeetingFileActionItem[];
+  decisions: string[];
+};
+
 export type MeetingFile = {
   id: string;
   meetingId: string;
@@ -21,6 +35,7 @@ export type MeetingFile = {
   mimeType: string;
   uploadedAt: string;
   transcription: MeetingFileTranscription | null;
+  summary: MeetingFileSummary | null;
 };
 
 /** Файл ещё ожидает или проходит транскрибацию — актуальный статус нужно поллить. */
@@ -28,6 +43,13 @@ export function isTranscriptionInProgress(file: MeetingFile): boolean {
   return (
     file.transcription?.status === 'PENDING' ||
     file.transcription?.status === 'PROCESSING'
+  );
+}
+
+/** Выжимка файла ещё ожидает или проходит обработку — актуальный статус нужно поллить. */
+export function isSummaryInProgress(file: MeetingFile): boolean {
+  return (
+    file.summary?.status === 'PENDING' || file.summary?.status === 'PROCESSING'
   );
 }
 

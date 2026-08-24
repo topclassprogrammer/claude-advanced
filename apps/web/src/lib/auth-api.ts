@@ -109,8 +109,18 @@ export async function refreshAccessToken(): Promise<string | null> {
   return body.accessToken;
 }
 
-/** Дедуплицирует конкурентные silent-refresh — несколько 401 почти одновременно должны обменять куку только один раз. */
-function dedupedRefresh(): Promise<string | null> {
+/**
+ * Дедуплицирует конкурентные silent-refresh — несколько почти одновременных
+ * вызовов (несколько 401 в authorizedFetch, либо React StrictMode дважды
+ * монтирующий useSession в dev) должны обменять refresh-куку только один
+ * раз: одновременные POST /auth/refresh с одним и тем же (ещё не
+ * ротированным на момент отправки) токеном упираются в race конкурентной
+ * ротации на бэкенде и второй запрос получает 401 вместо толерантного
+ * grace-period (см. apps/api/CLAUDE.md, «Аутентификация» — grace period
+ * покрывает только повторное предъявление уже ротированного токена, не
+ * гонку двух ротаций одного и того же токена).
+ */
+export function dedupedRefresh(): Promise<string | null> {
   if (!refreshPromise) {
     refreshPromise = refreshAccessToken().finally(() => {
       refreshPromise = null;
