@@ -2,7 +2,11 @@
 
 import { useState } from 'react';
 import { Alert, Button, Card, Chip, Disclosure, EmptyState } from '@heroui/react';
-import type { MeetingFile, TranscriptionStatus } from '@/lib/meeting-file-api';
+import type {
+  MeetingFile,
+  SummaryStatus,
+  TranscriptionStatus,
+} from '@/lib/meeting-file-api';
 import { MAX_FILES_PER_MEETING } from '@/lib/meeting-file-constraints';
 import { getFileIcon } from '@/lib/file-icon';
 import { ConfirmDeleteDialog } from '@/components/common/ConfirmDeleteDialog';
@@ -36,6 +40,35 @@ function TranscriptionStatusChip({ status }: { status: TranscriptionStatus }) {
         data-testid="transcription-status-chip"
       >
         Транскрипт: {TRANSCRIPTION_STATUS_LABEL[status]}
+      </Chip>
+    </div>
+  );
+}
+
+const SUMMARY_STATUS_LABEL: Record<SummaryStatus, string> = {
+  PENDING: 'В процессе',
+  PROCESSING: 'В процессе',
+  COMPLETED: 'Готово',
+  FAILED: 'Ошибка',
+};
+
+const SUMMARY_STATUS_COLOR: Record<SummaryStatus, 'warning' | 'success' | 'danger'> = {
+  PENDING: 'warning',
+  PROCESSING: 'warning',
+  COMPLETED: 'success',
+  FAILED: 'danger',
+};
+
+function SummaryStatusChip({ status }: { status: SummaryStatus }) {
+  return (
+    <div aria-live="polite">
+      <Chip
+        color={SUMMARY_STATUS_COLOR[status]}
+        variant="soft"
+        size="sm"
+        data-testid="summary-status-chip"
+      >
+        Выжимка: {SUMMARY_STATUS_LABEL[status]}
       </Chip>
     </div>
   );
@@ -109,9 +142,14 @@ function FileRow({
           <p className="text-sm text-muted">
             {formatFileSize(file.size)} · {formatUploadedAt(file.uploadedAt)}
           </p>
-          {file.transcription ? (
-            <div className="mt-2">
-              <TranscriptionStatusChip status={file.transcription.status} />
+          {file.transcription || file.summary ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {file.transcription ? (
+                <TranscriptionStatusChip status={file.transcription.status} />
+              ) : null}
+              {file.summary ? (
+                <SummaryStatusChip status={file.summary.status} />
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -158,6 +196,80 @@ function FileRow({
               >
                 {file.transcription.text}
               </p>
+            </Disclosure.Body>
+          </Disclosure.Content>
+        </Disclosure.Root>
+      ) : null}
+
+      {file.summary?.status === 'COMPLETED' ? (
+        <Disclosure.Root className="rounded-xl bg-default px-4">
+          <Disclosure.Heading>
+            <Disclosure.Trigger>
+              Выжимка
+              <Disclosure.Indicator />
+            </Disclosure.Trigger>
+          </Disclosure.Heading>
+          <Disclosure.Content>
+            <Disclosure.Body>
+              <div className="flex flex-col gap-4">
+                {file.summary.summary ? (
+                  <p
+                    className="whitespace-pre-wrap text-sm text-foreground"
+                    data-testid="summary-text"
+                  >
+                    {file.summary.summary}
+                  </p>
+                ) : null}
+
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    Пункты действий
+                  </p>
+                  {file.summary.actionItems.length > 0 ? (
+                    <ul
+                      className="mt-1 list-inside list-disc text-sm text-foreground"
+                      data-testid="summary-action-items"
+                    >
+                      {file.summary.actionItems.map((item, index) => (
+                        <li key={index}>
+                          {item.text}
+                          {item.assignee ? ` — ${item.assignee}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p
+                      className="mt-1 text-sm text-muted"
+                      data-testid="summary-action-items-empty"
+                    >
+                      Нет пунктов
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    Принятые решения
+                  </p>
+                  {file.summary.decisions.length > 0 ? (
+                    <ul
+                      className="mt-1 list-inside list-disc text-sm text-foreground"
+                      data-testid="summary-decisions"
+                    >
+                      {file.summary.decisions.map((decision, index) => (
+                        <li key={index}>{decision}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p
+                      className="mt-1 text-sm text-muted"
+                      data-testid="summary-decisions-empty"
+                    >
+                      Нет пунктов
+                    </p>
+                  )}
+                </div>
+              </div>
             </Disclosure.Body>
           </Disclosure.Content>
         </Disclosure.Root>

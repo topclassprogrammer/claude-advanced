@@ -3,10 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  dedupedRefresh,
   getAccessToken,
   getCurrentUser,
   logout as logoutRequest,
-  refreshAccessToken,
 } from '@/lib/auth-api';
 
 export type Session = {
@@ -27,7 +27,7 @@ export function useSession(): { session: Session | null; logout: () => void } {
       // токен уже есть (SPA-переход сразу после логина/регистрации),
       // лишний round-trip не нужен.
       if (!getAccessToken()) {
-        const refreshed = await refreshAccessToken();
+        const refreshed = await dedupedRefresh();
         if (!refreshed) {
           if (!cancelled) router.replace('/auth/login');
           return;
