@@ -51,6 +51,8 @@ export class ProcessMeetingFileSummaryHandler implements ICommandHandler<
    * updateMany + повторный findUnique (не update) — файл встречи мог быть
    * удалён (каскадно снеся выжимку) конкурентно с ещё выполняющейся
    * обработкой; в этом случае сохранять action items уже некуда.
+   * deleteMany перед createMany делает запись идемпотентной на случай
+   * повторного запуска этой же команды (иначе action items задублировались бы).
    */
   private async saveGeneratedSummary(
     meetingFileId: string,
@@ -64,7 +66,7 @@ export class ProcessMeetingFileSummaryHandler implements ICommandHandler<
         decisions: generated.decisions,
       },
     });
-    if (count === 0 || generated.actionItems.length === 0) {
+    if (count === 0) {
       return;
     }
 
@@ -75,6 +77,12 @@ export class ProcessMeetingFileSummaryHandler implements ICommandHandler<
       return;
     }
 
+    await this.prisma.summaryActionItem.deleteMany({
+      where: { meetingFileSummaryId: summaryRecord.id },
+    });
+    if (generated.actionItems.length === 0) {
+      return;
+    }
     await this.prisma.summaryActionItem.createMany({
       data: generated.actionItems.map((item) => ({
         meetingFileSummaryId: summaryRecord.id,

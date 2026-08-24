@@ -1,4 +1,13 @@
-const parseMock = jest.fn();
+interface ParseRequest {
+  model: string;
+  system: string;
+  messages: { role: string; content: string }[];
+}
+
+const parseMock = jest.fn<
+  Promise<{ parsed_output: unknown }>,
+  [ParseRequest]
+>();
 
 jest.mock('@anthropic-ai/sdk', () => ({
   __esModule: true,
@@ -8,6 +17,10 @@ jest.mock('@anthropic-ai/sdk', () => ({
 }));
 
 import { AnthropicSummaryService } from './anthropic-summary.service';
+import {
+  CLAUDE_SUMMARY_MODEL,
+  SUMMARY_SYSTEM_PROMPT,
+} from './summary.constants';
 
 describe('AnthropicSummaryService', () => {
   let service: AnthropicSummaryService;
@@ -39,6 +52,12 @@ describe('AnthropicSummaryService', () => {
       ],
       decisions: ['Ship in Q3'],
     });
+    const call = parseMock.mock.calls[0][0];
+    expect(call.model).toBe(CLAUDE_SUMMARY_MODEL);
+    expect(call.system).toBe(SUMMARY_SYSTEM_PROMPT);
+    expect(call.messages).toHaveLength(1);
+    expect(call.messages[0].role).toBe('user');
+    expect(call.messages[0].content).toContain('this is the transcript');
   });
 
   it('throws when the response fails schema validation', async () => {
