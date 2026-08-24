@@ -33,9 +33,9 @@ model RefreshToken {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  tokenHash String    @unique
-  expiresAt DateTime
-  revokedAt DateTime?
+  tokenHash         String    @unique
+  expiresAt         DateTime
+  revokedAt         DateTime?
   /**
    * Заполняется, только когда токен погашен нормальной ротацией
    * (POST /auth/refresh) — отличает такой отзыв от явного (logout, смена
@@ -53,7 +53,7 @@ model RefreshToken {
    * REUSE_GRACE_PERIOD_MS назад, мог бы породить новую независимую от
    * отзыва цепочку в обход logout/смены пароля/детекта кражи.
    */
-  familyId String
+  familyId          String
   /**
    * Ставится разом на все строки цепочки (по familyId, независимо от их
    * текущего revokedAt) при явном отзыве — logout, смена пароля, детект
@@ -62,7 +62,7 @@ model RefreshToken {
    * непустое значение немедленно и необратимо закрывает эту grace-ветку
    * для всей цепочки.
    */
-  familyRevokedAt DateTime?
+  familyRevokedAt   DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -97,6 +97,7 @@ model MeetingFile {
   uploadedAt    DateTime                  @default(now())
   updatedAt     DateTime                  @updatedAt
   transcription MeetingFileTranscription?
+  summary       MeetingFileSummary?
 
   @@index([meetingId])
 }
@@ -119,4 +120,38 @@ model MeetingFileTranscription {
   updatedAt     DateTime            @updatedAt
 
   @@index([meetingFileId])
+}
+
+enum SummaryStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model MeetingFileSummary {
+  id            String              @id @default(uuid())
+  meetingFileId String              @unique
+  meetingFile   MeetingFile         @relation(fields: [meetingFileId], references: [id], onDelete: Cascade)
+  status        SummaryStatus       @default(PENDING)
+  summary       String?
+  decisions     String[]
+  actionItems   SummaryActionItem[]
+  errorMessage  String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([meetingFileId])
+}
+
+model SummaryActionItem {
+  id                   String             @id @default(uuid())
+  meetingFileSummaryId String
+  meetingFileSummary   MeetingFileSummary @relation(fields: [meetingFileSummaryId], references: [id], onDelete: Cascade)
+  text                 String
+  assignee             String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([meetingFileSummaryId])
 }
