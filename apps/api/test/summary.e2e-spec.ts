@@ -253,7 +253,11 @@ describe('Summary (e2e)', () => {
   });
 
   it('reaches COMPLETED with explicit empty lists when there are no action items or decisions', async () => {
-    fakeClaude.result = { summary: 'Quick sync, nothing else.', actionItems: [], decisions: [] };
+    fakeClaude.result = {
+      summary: 'Quick sync, nothing else.',
+      actionItems: [],
+      decisions: [],
+    };
 
     const res = await uploadFile(
       ownerToken,
@@ -286,6 +290,43 @@ describe('Summary (e2e)', () => {
     expect(summary.status).toBe('FAILED');
     expect(summary.summary).toBeNull();
     expect(summary.actionItems).toEqual([]);
+  });
+
+  it('keeps the transcript text and a working file list after the summary fails', async () => {
+    fakeClaude.shouldFail = true;
+
+    const res = await uploadFile(
+      ownerToken,
+      'recording.mp3',
+      'audio/mpeg',
+    ).expect(201);
+    const fileId = (res.body as MeetingFileResponseBody).id;
+
+    await waitForTranscriptionSettled(fileId);
+    const summary = await waitForSummarySettled(fileId);
+    expect(summary.status).toBe('FAILED');
+
+    const files = await getFiles();
+    const file = files.find((candidate) => candidate.id === fileId);
+    expect(file?.transcription?.status).toBe('COMPLETED');
+    expect(file?.transcription?.text).toBe(FAKE_TRANSCRIPT);
+  });
+
+  it('reaches COMPLETED for a transcript exceeding the model context window', async () => {
+    const hugeTranscript = 'word '.repeat(50_000);
+    fakeWhisper.transcribe = () => Promise.resolve(hugeTranscript);
+
+    const res = await uploadFile(
+      ownerToken,
+      'recording.mp3',
+      'audio/mpeg',
+    ).expect(201);
+    const fileId = (res.body as MeetingFileResponseBody).id;
+
+    await waitForTranscriptionSettled(fileId);
+    const summary = await waitForSummarySettled(fileId);
+
+    expect(summary.status).toBe('COMPLETED');
   });
 
   it('does not start summary generation when the transcription fails', async () => {

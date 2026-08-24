@@ -30,7 +30,10 @@ export class GetMeetingFilesHandler implements IQueryHandler<
     return this.prisma.meetingFile.findMany({
       where: { meetingId },
       orderBy: { uploadedAt: 'desc' },
-      include: { transcription: true, summary: { include: { actionItems: true } } },
+      include: {
+        transcription: true,
+        summary: { include: { actionItems: true } },
+      },
     });
   }
 }
