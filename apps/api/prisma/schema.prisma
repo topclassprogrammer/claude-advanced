@@ -82,6 +82,7 @@ model Meeting {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   files        MeetingFile[]
+  tasks        Task[]        @relation("MeetingTasks")
 
   @@index([organizerId])
 }
@@ -154,4 +155,23 @@ model SummaryActionItem {
   updatedAt            DateTime           @updatedAt
 
   @@index([meetingFileSummaryId])
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+}
+
+model Task {
+  id              String     @id @default(uuid())
+  title           String
+  sourceMeetingId String?
+  sourceMeeting   Meeting?   @relation("MeetingTasks", fields: [sourceMeetingId], references: [id], onDelete: SetNull)
+  status          TaskStatus @default(OPEN)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@unique([sourceMeetingId, title])
+  @@index([sourceMeetingId])
 }

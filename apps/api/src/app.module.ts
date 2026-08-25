@@ -16,6 +16,7 @@ import { AuthModule } from './auth/auth.module';
 import { MeetingModule } from './meeting/meeting.module';
 import { MeetingFileModule } from './meeting-file/meeting-file.module';
 import { ProfileModule } from './profile/profile.module';
+import { TaskModule } from './task/task.module';
 
 /**
  * Throttling отключён только при явном NODE_ENV=development/test (fail-closed:
@@ -45,6 +46,7 @@ const throttlingEnabled = isProductionLikeEnv();
     MeetingModule,
     MeetingFileModule,
     ProfileModule,
+    TaskModule,
   ],
   providers: [
     {

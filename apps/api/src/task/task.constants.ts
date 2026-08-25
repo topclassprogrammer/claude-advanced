@@ -1,0 +1,1 @@
+export const MAX_TASK_SEARCH_RESULTS = 20;
