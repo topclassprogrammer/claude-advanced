@@ -1,6 +1,154 @@
 @import 'tailwindcss';
 @import '@heroui/styles';
 
+/*
+ * Токены дизайн-системы (design/VideoMeeting.pen, node r52SBt).
+ * Переопределяем переменные темы HeroUI её же официальным механизмом
+ * кастомизации (см. node_modules/@heroui/styles/dist/themes/default/variables.css) —
+ * это единственная светлая тема проекта, поэтому переопределение идёт
+ * напрямую в :root, без @media (prefers-color-scheme: dark) (см. apps/web/CLAUDE.md,
+ * «UI-библиотека», про конфликт с переключением темы HeroUI по [data-theme]).
+ */
+:root {
+  --background: #f5f6f8;
+  --foreground: #0e1116;
+
+  --surface: #ffffff;
+  --surface-secondary: #fafafb;
+  --surface-shadow: none;
+
+  --default: #f5f6f8;
+  --muted: #5b6472;
+
+  --accent: #4e46e5;
+  --accent-soft: #eeedfe;
+
+  --success: #0e9f6e;
+  --success-soft: #e4f6ef;
+
+  --warning: #b45309;
+  --warning-soft: #fdf3e3;
+
+  --danger: #dc2b36;
+  --danger-soft: #fdecec;
+
+  --border: #e6e8ec;
+  --border-secondary: #d3d7de;
+
+  --field-background: var(--default);
+  --field-border: var(--border);
+  --field-radius: 8px;
+
+  /* Токены без прямого аналога в HeroUI. */
+  --text-tertiary: #8a93a0;
+  --sidebar: #0e1116;
+  --sidebar-foreground: #8a93a0;
+  --panel-secondary: #171b22;
+  --panel-tertiary: #1e242d;
+}
+
+@theme inline {
+  --color-text-tertiary: var(--text-tertiary);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-panel-secondary: var(--panel-secondary);
+  --color-panel-tertiary: var(--panel-tertiary);
+
+  /* Шкала скруглений дизайн-системы — именована по назначению, а не по
+     т-shirt-размеру, чтобы не пересекаться с собственной шкалой HeroUI
+     (--radius-xs…--radius-4xl в @heroui/styles/dist/themes/shared/theme.css). */
+  --radius-chip: 6px;
+  --radius-control: 8px;
+  --radius-block: 12px;
+  --radius-card: 16px;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --text-display: 38px;
+  --text-display--line-height: 1.1;
+  --text-display--letter-spacing: -1.2px;
+  --text-display--font-weight: 700;
+
+  --text-heading-l: 26px;
+  --text-heading-l--line-height: 1.2;
+  --text-heading-l--letter-spacing: -0.7px;
+  --text-heading-l--font-weight: 700;
+
+  --text-heading-m: 17px;
+  --text-heading-m--line-height: 1.3;
+  --text-heading-m--letter-spacing: -0.3px;
+  --text-heading-m--font-weight: 600;
+
+  --text-heading-s: 14.5px;
+  --text-heading-s--line-height: 1.3;
+  --text-heading-s--letter-spacing: -0.2px;
+  --text-heading-s--font-weight: 600;
+
+  --text-body: 13.5px;
+  --text-body--line-height: 1.65;
+  --text-body--font-weight: 400;
+
+  --text-body-s: 13px;
+  --text-body-s--line-height: 1.5;
+  --text-body-s--font-weight: 400;
+
+  --text-label: 12.5px;
+  --text-label--line-height: 1.3;
+  --text-label--font-weight: 600;
+
+  --text-meta: 12px;
+  --text-meta--line-height: 1.3;
+  --text-meta--font-weight: 400;
+
+  --text-overline: 10px;
+  --text-overline--line-height: 1.3;
+  --text-overline--letter-spacing: 0.9px;
+  --text-overline--font-weight: 600;
+}
+
+/*
+ * Точечные оверрайды формы отдельных компонентов HeroUI, чья форма зашита
+ * в собственный класс компонента (не через переопределяемые выше
+ * переменные), — правим только те классы, которые реально используются
+ * в проекте (Button, Card, Chip), чтобы не задеть неиспользуемые компоненты
+ * (Badge, Toast, Avatar и т.д.), которые тоже опираются на --radius-3xl.
+ */
+.button {
+  border-radius: var(--radius-control);
+}
+
+.button--outline {
+  --button-bg: var(--surface);
+}
+
+.button--contrast {
+  --button-bg: var(--foreground);
+  --button-bg-hover: var(--foreground);
+  --button-bg-pressed: var(--foreground);
+  --button-fg: var(--surface);
+}
+
+.card {
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+}
+
+.chip {
+  border-radius: var(--radius-chip);
+}
+
+/* Состояния карточки (см. .pen, «Границы и тени»): по умолчанию — только
+   граница; приподнятая — лёгкая тень; выбранная — акцентная граница + свечение. */
+.card--elevated {
+  box-shadow: 0 1px 2px rgba(14, 17, 22, 0.08);
+}
+
+.card--selected {
+  border-color: var(--accent);
+  border-width: 1.5px;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
 html {
   height: 100%;
 }
@@ -17,7 +165,7 @@ body {
   flex-direction: column;
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

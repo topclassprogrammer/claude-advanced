@@ -3,20 +3,10 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import {
-  Alert,
-  Button,
-  Card,
-  FieldError,
-  Form,
-  Input,
-  Label,
-  Spinner,
-  TextField,
-} from '@heroui/react';
+import { Alert, Button, FieldError, Form, Input, Label, Spinner, TextField } from '@heroui/react';
 import { ApiError, login } from '@/lib/auth-api';
 import { EMAIL_PATTERN } from '@/lib/email-pattern';
-import { AuthFormShell } from '@/components/auth/AuthFormShell';
+import { AuthScreenShell } from '@/components/auth/AuthScreenShell';
 import { PasswordField } from '@/components/auth/PasswordField';
 
 export default function LoginPage() {
@@ -47,12 +37,17 @@ export default function LoginPage() {
   };
 
   return (
-    <AuthFormShell
-      title="Вход в аккаунт"
-      description="Введите email и пароль, чтобы продолжить"
+    <AuthScreenShell
+      promoHeadline="Продолжите там, где остановились"
+      promoSub="Записи, расшифровки, итоги и задачи ваших встреч — всё на месте."
     >
-      <Form onSubmit={onSubmit}>
-        <Card.Content className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <h2 className="text-heading-l text-foreground">Вход в аккаунт</h2>
+        <p className="text-body text-muted">Введите почту и пароль, чтобы продолжить.</p>
+      </div>
+
+      <Form onSubmit={onSubmit} className="flex flex-col gap-[26px]">
+        <div className="flex flex-col gap-4.5">
           {error ? (
             <Alert status="danger">
               <Alert.Indicator />
@@ -69,16 +64,10 @@ export default function LoginPage() {
             isDisabled={isPending}
             name="email"
             type="email"
-            validate={(value) =>
-              EMAIL_PATTERN.test(value) ? null : 'Введите корректный email'
-            }
+            validate={(value) => (EMAIL_PATTERN.test(value) ? null : 'Введите корректный email')}
           >
             <Label>Email</Label>
-            <Input
-              autoComplete="email"
-              autoFocus
-              placeholder="you@example.com"
-            />
+            <Input autoComplete="email" autoFocus placeholder="you@example.com" />
             <FieldError />
           </TextField>
 
@@ -88,29 +77,24 @@ export default function LoginPage() {
             placeholder="Введите пароль"
             validate={(value) => (value.length > 0 ? null : 'Введите пароль')}
           />
-        </Card.Content>
+        </div>
 
-        <Card.Footer className="mt-2 flex flex-col gap-4">
-          <Button className="w-full" isPending={isPending} type="submit">
-            {({ isPending: pending }) => (
-              <>
-                {pending ? <Spinner color="current" size="sm" /> : null}
-                {pending ? 'Вход...' : 'Войти'}
-              </>
-            )}
-          </Button>
-
-          <p className="text-center text-sm text-muted">
-            Ещё нет аккаунта?{' '}
-            <Link
-              href="/auth/register"
-              className="font-medium text-accent hover:underline"
-            >
-              Зарегистрироваться
-            </Link>
-          </p>
-        </Card.Footer>
+        <Button className="w-full" isPending={isPending} type="submit">
+          {({ isPending: pending }) => (
+            <>
+              {pending ? <Spinner color="current" size="sm" /> : null}
+              {pending ? 'Вход...' : 'Войти'}
+            </>
+          )}
+        </Button>
       </Form>
-    </AuthFormShell>
+
+      <p className="border-t border-border pt-5 text-body-s text-muted">
+        Ещё нет аккаунта?{' '}
+        <Link href="/auth/register" className="text-label text-accent hover:underline">
+          Зарегистрироваться
+        </Link>
+      </p>
+    </AuthScreenShell>
   );
 }

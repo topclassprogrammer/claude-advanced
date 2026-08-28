@@ -15,11 +15,18 @@ import {
 } from '@heroui/react';
 import { ApiError } from '@/lib/auth-api';
 import { createMeeting, type Meeting } from '@/lib/meeting-api';
+import { PlusIcon } from '@/components/icons/PlusIcon';
 
 export function CreateMeetingModal({
   onCreated,
+  className,
+  iconOnly = false,
 }: {
   onCreated: (meeting: Meeting) => void;
+  /** Классы кнопки-триггера (по умолчанию — обычная кнопка без доп. стилей). */
+  className?: string;
+  /** Только иконка плюса, без текста — для тесных мест (мобильный топбар). */
+  iconOnly?: boolean;
 }) {
   const [isOpen, setOpen] = useState(false);
   const [isPending, setPending] = useState(false);
@@ -64,7 +71,15 @@ export function CreateMeetingModal({
 
   return (
     <>
-      <Button onPress={() => setOpen(true)}>Создать встречу</Button>
+      <Button
+        className={className}
+        onPress={() => setOpen(true)}
+        isIconOnly={iconOnly}
+        aria-label={iconOnly ? 'Создать встречу' : undefined}
+      >
+        <PlusIcon width={16} height={16} />
+        {iconOnly ? null : 'Создать встречу'}
+      </Button>
 
       <Modal isOpen={isOpen} onOpenChange={setOpen}>
         <Modal.Backdrop>

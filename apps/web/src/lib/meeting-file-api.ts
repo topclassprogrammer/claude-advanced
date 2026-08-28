@@ -152,6 +152,21 @@ export async function deleteMeetingFile(
   }
 }
 
+/** Отдаёт файл встречи как blob-URL (для <audio>/<video> src) — тот же паттерн, что и getAvatarObjectUrl. */
+export async function getMeetingFileObjectUrl(
+  meetingId: string,
+  fileId: string,
+): Promise<string> {
+  const res = await authorizedFetch(`/meetings/${meetingId}/files/${fileId}/download`);
+
+  if (!res.ok) {
+    throw new ApiError('Не удалось загрузить файл', res.status);
+  }
+
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
 /** Скачивает файл встречи с авторизацией и запускает сохранение в браузере через blob-ссылку. */
 export async function downloadMeetingFile(
   meetingId: string,

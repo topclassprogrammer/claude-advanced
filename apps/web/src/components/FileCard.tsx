@@ -68,11 +68,11 @@ function FileRow({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-3 rounded-xl bg-default p-4">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl bg-default p-4">
         {getFileIcon(file.mimeType, {
           className: 'size-6 shrink-0 text-muted',
         })}
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-40">
           <p className="truncate font-semibold text-foreground">
             {file.filename}
           </p>
@@ -98,7 +98,7 @@ function FileRow({
             </div>
           ) : null}
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Button onPress={handleDownload} isDisabled={downloading}>
             <DownloadIcon className="size-4 shrink-0" />
             {downloading ? 'Скачивание…' : 'Скачать'}

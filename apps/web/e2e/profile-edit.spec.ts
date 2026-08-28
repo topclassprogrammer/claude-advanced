@@ -48,13 +48,13 @@ test('uploading a valid avatar via drag-and-drop updates the avatar on /profile 
     buffer: Buffer.from(PNG_BASE64, 'base64'),
   });
 
-  await expect(page.getByRole('img', { name: /аватар/i })).toBeVisible();
+  await expect(page.getByRole('img', { name: /аватар/i }).first()).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Удалить аватар' }),
   ).toBeVisible();
 
   await page.goto('/');
-  await expect(page.getByRole('img', { name: /аватар/i })).toBeVisible();
+  await expect(page.getByRole('img', { name: /аватар/i }).first()).toBeVisible();
 });
 
 test('rejects an avatar with a disallowed file type with a clear error, without losing the page', async ({
@@ -116,7 +116,7 @@ test('deleting the avatar reverts to the placeholder', async ({
   await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto('/profile');
-  await expect(page.getByRole('img', { name: /аватар/i })).toBeVisible();
+  await expect(page.getByRole('img', { name: /аватар/i }).first()).toBeVisible();
 
   await page.getByRole('button', { name: 'Удалить аватар' }).click();
   const dialog = page.getByRole('alertdialog');

@@ -69,8 +69,13 @@ test('shows transcription status that updates without reload and reveals the tra
   const { refreshTokenCookie, meetingId, fileId } =
     await setupMeetingWithAudioFile('transcription-status');
 
-  await fakeTranscriptionProgress(page, fileId);
   await setSessionCookie(context, refreshTokenCookie);
+  // Warm up the route's compilation (Next dev compiles on demand) before
+  // starting the timed PENDING -> PROCESSING -> COMPLETED poll sequence below,
+  // otherwise a slow first compile can eat into the 4s poll interval and the
+  // PROCESSING state can be missed entirely.
+  await page.goto('/');
+  await fakeTranscriptionProgress(page, fileId);
 
   await page.goto(`/meetings/${meetingId}`);
 
@@ -120,7 +125,9 @@ test('shows a failed transcription status without blocking download/delete', asy
 
   // Download/delete stay functional despite the failed transcription.
   await expect(page.getByRole('button', { name: /скачать/i })).toBeEnabled();
-  await expect(page.getByRole('button', { name: /удалить/i })).toBeEnabled();
+  await expect(
+    page.getByRole('button', { name: 'Удалить', exact: true }),
+  ).toBeEnabled();
 });
 
 test('shows no transcription status for a non-transcribable file type', async ({

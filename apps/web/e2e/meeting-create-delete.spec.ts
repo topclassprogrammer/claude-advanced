@@ -52,12 +52,9 @@ test('deletes a meeting via the confirmation dialog', async ({
   await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto('/');
-  await expect(page.getByText('Retro to delete').first()).toBeVisible();
+  await page.getByText('Retro to delete').first().click();
 
-  await page
-    .getByRole('button', { name: /удалить встречу/i })
-    .first()
-    .click();
+  await page.getByRole('button', { name: 'Удалить встречу' }).click();
 
   const dialog = page.getByRole('alertdialog');
   await expect(dialog).toBeVisible();
@@ -85,10 +82,9 @@ test('cancelling the delete confirmation keeps the meeting', async ({
   await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto('/');
-  await page
-    .getByRole('button', { name: /удалить встречу/i })
-    .first()
-    .click();
+  await page.getByText('Keep this meeting').first().click();
+
+  await page.getByRole('button', { name: 'Удалить встречу' }).click();
 
   const dialog = page.getByRole('alertdialog');
   await expect(dialog).toBeVisible();

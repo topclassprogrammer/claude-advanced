@@ -148,8 +148,6 @@ test('hides the upload zone once the meeting already has 10 files', async ({
 
   await page.goto(`/meetings/${meetingId}`);
 
-  await expect(page.getByText('Файлы встречи')).toBeVisible();
-  await expect(page.getByText('10 из 10')).toBeVisible();
   await expect(page.getByText(/достигнут лимит 10 файлов/i)).toBeVisible();
   await expect(page.locator('input[type="file"]')).toHaveCount(0);
 });
@@ -207,7 +205,7 @@ test('organizer deletes the attached file and card reverts to empty state', asyn
   await page.goto(`/meetings/${meetingId}`);
   await expect(page.getByText('notes.txt')).toBeVisible();
 
-  const deleteButton = page.getByRole('button', { name: /удалить/i });
+  const deleteButton = page.getByRole('button', { name: 'Удалить', exact: true });
   await expect(deleteButton).toBeVisible();
   await deleteButton.click();
 
@@ -269,7 +267,7 @@ test('cancelling the confirmation dialog keeps the file attached', async ({
   await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto(`/meetings/${meetingId}`);
-  await page.getByRole('button', { name: /удалить/i }).click();
+  await page.getByRole('button', { name: 'Удалить', exact: true }).click();
 
   const dialog = page.getByRole('alertdialog');
   await expect(dialog).toBeVisible();
@@ -340,7 +338,7 @@ test('full lifecycle: upload, display, download, delete', async ({
   ]);
   expect(download.suggestedFilename()).toBe('lifecycle.txt');
 
-  await page.getByRole('button', { name: /удалить/i }).click();
+  await page.getByRole('button', { name: 'Удалить', exact: true }).click();
   const dialog = page.getByRole('alertdialog');
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: /удалить/i }).click();

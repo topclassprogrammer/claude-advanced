@@ -1,11 +1,27 @@
-export function BrandIcon({ className }: { className?: string }) {
+const SIZE_CLASSES = {
+  md: 'size-12 rounded-2xl',
+  sm: 'size-9 rounded-[10px]',
+} as const;
+
+const ICON_SIZE = {
+  md: 26,
+  sm: 20,
+} as const;
+
+export function BrandIcon({
+  className,
+  size = 'md',
+}: {
+  className?: string;
+  size?: keyof typeof SIZE_CLASSES;
+}) {
   return (
     <span
-      className={`flex size-12 items-center justify-center rounded-2xl bg-accent shadow-sm ${className ?? ''}`}
+      className={`flex items-center justify-center bg-accent shadow-sm ${SIZE_CLASSES[size]} ${className ?? ''}`}
     >
       <svg
-        width="26"
-        height="26"
+        width={ICON_SIZE[size]}
+        height={ICON_SIZE[size]}
         viewBox="0 0 24 24"
         fill="none"
         aria-hidden="true"

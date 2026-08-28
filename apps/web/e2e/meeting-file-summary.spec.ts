@@ -234,7 +234,9 @@ test('shows a failed summary status without blocking download/delete', async ({
   await expect(page.getByRole('button', { name: /выжимка/i })).toHaveCount(0);
 
   await expect(page.getByRole('button', { name: /скачать/i })).toBeEnabled();
-  await expect(page.getByRole('button', { name: /удалить/i })).toBeEnabled();
+  await expect(
+    page.getByRole('button', { name: 'Удалить', exact: true }),
+  ).toBeEnabled();
 });
 
 test('shows no summary status for a non-transcribable file type', async ({

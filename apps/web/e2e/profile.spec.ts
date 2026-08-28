@@ -17,10 +17,10 @@ test('shows default name derived from email and avatar placeholder when profile 
   await page.goto('/profile');
 
   await expect(
-    page.getByText(email.split('@')[0], { exact: true }),
+    page.getByText(email.split('@')[0], { exact: true }).first(),
   ).toBeVisible();
-  await expect(page.getByText(email)).toBeVisible();
-  await expect(page.getByTestId('avatar-placeholder')).toBeVisible();
+  await expect(page.getByText(email).first()).toBeVisible();
+  await expect(page.getByTestId('avatar-placeholder').first()).toBeVisible();
 });
 
 test('shows name and avatar set via API on the profile page and on the home page header', async ({
@@ -42,11 +42,11 @@ test('shows name and avatar set via API on the profile page and on the home page
   await setSessionCookie(context, refreshTokenCookie);
 
   await page.goto('/profile');
-  await expect(page.getByText('Alice Example')).toBeVisible();
-  await expect(page.getByText(email)).toBeVisible();
-  await expect(page.getByRole('img', { name: /аватар/i })).toBeVisible();
+  await expect(page.getByText('Alice Example').first()).toBeVisible();
+  await expect(page.getByText(email).first()).toBeVisible();
+  await expect(page.getByRole('img', { name: /аватар/i }).first()).toBeVisible();
 
   await page.goto('/');
-  await expect(page.getByText('Alice Example')).toBeVisible();
-  await expect(page.getByRole('img', { name: /аватар/i })).toBeVisible();
+  await expect(page.getByText('Alice Example').first()).toBeVisible();
+  await expect(page.getByRole('img', { name: /аватар/i }).first()).toBeVisible();
 });

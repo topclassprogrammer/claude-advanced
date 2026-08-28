@@ -1,26 +1,47 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Alert, Card, Spinner } from '@heroui/react';
+import { useRouter } from 'next/navigation';
+import { Alert, Spinner } from '@heroui/react';
 import { ApiError } from '@/lib/auth-api';
+import { getMeetings, type Meeting } from '@/lib/meeting-api';
 import { getProfile, type Profile } from '@/lib/profile-api';
 import { useSession } from '@/hooks/useSession';
+import { AppSidebar } from '@/components/meetings/AppSidebar';
 import { Avatar } from '@/components/Avatar';
 import { AvatarUpload } from '@/components/AvatarUpload';
-import { BrandIcon } from '@/components/BrandIcon';
 import { ChangePasswordForm } from '@/components/ChangePasswordForm';
 import { ProfileNameForm } from '@/components/ProfileNameForm';
+import { ProfileTopbar } from '@/components/profile/ProfileTopbar';
+import { SettingsCard } from '@/components/profile/SettingsCard';
+import { AccountSummaryCard } from '@/components/profile/AccountSummaryCard';
+import { AccountDataCard } from '@/components/profile/AccountDataCard';
+import { SecurityCard } from '@/components/profile/SecurityCard';
+import { ImageIcon } from '@/components/icons/ImageIcon';
+import { PencilIcon } from '@/components/icons/PencilIcon';
+import { LockKeyholeIcon } from '@/components/icons/LockKeyholeIcon';
 
+/**
+ * Страница профиля (маршрут /profile, требует авторизации, см. .pen node
+ * snVvB «App — Профиль»): тот же каркас сайдбар+топбар, что и у MeetingsScreen,
+ * и две колонки карточек — сводка/данные/безопасность аккаунта слева,
+ * редактирование имени/аватара/пароля справа.
+ */
 export default function ProfilePage() {
-  const { session } = useSession();
+  const { session, logout } = useSession();
+  const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [meetingsCount, setMeetingsCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [avatarVersion, setAvatarVersion] = useState(0);
 
   const handleAvatarChange = (updated: Profile) => {
     setProfile(updated);
     setAvatarVersion((v) => v + 1);
+  };
+
+  const handleMeetingCreated = (meeting: Meeting) => {
+    router.push(`/meetings/${meeting.id}`);
   };
 
   useEffect(() => {
@@ -37,6 +58,16 @@ export default function ProfilePage() {
       });
   }, [session]);
 
+  useEffect(() => {
+    if (!session) return;
+
+    getMeetings()
+      .then((meetings) => setMeetingsCount(meetings.length))
+      .catch(() => {
+        // Показатель «Встреч» остаётся прочерком, если список не удалось загрузить.
+      });
+  }, [session]);
+
   if (!session) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -46,91 +77,69 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="flex min-h-screen justify-center px-4 py-10">
-      <div className="flex w-full max-w-2xl flex-col gap-8">
-        <header className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <BrandIcon />
-            <div>
-              <p className="font-semibold text-foreground">Видеовстречи</p>
-              <p className="text-sm text-muted">Профиль</p>
+    <div className="flex h-screen w-full">
+      <AppSidebar
+        email={session.email}
+        profile={profile}
+        avatarVersion={avatarVersion}
+        onMeetingCreated={handleMeetingCreated}
+        onLogout={logout}
+      />
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <ProfileTopbar subtitle={session.email} onLogout={logout} />
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          {error ? (
+            <Alert status="danger">
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>Не удалось загрузить профиль</Alert.Title>
+                <Alert.Description>{error}</Alert.Description>
+              </Alert.Content>
+            </Alert>
+          ) : !profile ? (
+            <div className="flex justify-center py-16">
+              <Spinner size="lg" />
             </div>
-          </div>
-          <Link href="/" className="text-sm text-muted hover:underline">
-            На главную
-          </Link>
-        </header>
-
-        {error ? (
-          <Alert status="danger">
-            <Alert.Indicator />
-            <Alert.Content>
-              <Alert.Title>Не удалось загрузить профиль</Alert.Title>
-              <Alert.Description>{error}</Alert.Description>
-            </Alert.Content>
-          </Alert>
-        ) : null}
-
-        {!profile && !error ? (
-          <div className="flex justify-center py-16">
-            <Spinner size="lg" />
-          </div>
-        ) : null}
-
-        {profile ? (
-          <Card>
-            <Card.Header>
-              <Card.Title>Профиль</Card.Title>
-            </Card.Header>
-            <Card.Content className="flex items-center gap-4">
-              <Avatar
-                key={`${profile.avatarUrl}-${avatarVersion}`}
-                avatarUrl={profile.avatarUrl}
-                name={profile.name}
-                size="lg"
-              />
-              <div>
-                <p className="text-lg font-semibold text-foreground">
-                  {profile.name}
-                </p>
-                <p className="text-sm text-muted">{profile.email}</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[400px_1fr]">
+              <div className="flex flex-col gap-5">
+                <AccountSummaryCard
+                  profile={profile}
+                  meetingsCount={meetingsCount}
+                  avatarVersion={avatarVersion}
+                />
+                <AccountDataCard profile={profile} />
+                <SecurityCard />
               </div>
-            </Card.Content>
-          </Card>
-        ) : null}
 
-        {profile ? (
-          <Card>
-            <Card.Header>
-              <Card.Title>Имя</Card.Title>
-            </Card.Header>
-            <Card.Content>
-              <ProfileNameForm name={profile.name} onUpdated={setProfile} />
-            </Card.Content>
-          </Card>
-        ) : null}
+              <div className="flex flex-col gap-5">
+                <SettingsCard icon={<PencilIcon width={14} height={14} />} title="Имя">
+                  <ProfileNameForm name={profile.name} onUpdated={setProfile} />
+                </SettingsCard>
 
-        {profile ? (
-          <Card>
-            <Card.Header>
-              <Card.Title>Аватар</Card.Title>
-            </Card.Header>
-            <Card.Content>
-              <AvatarUpload profile={profile} onChange={handleAvatarChange} />
-            </Card.Content>
-          </Card>
-        ) : null}
+                <SettingsCard icon={<ImageIcon width={14} height={14} />} title="Аватар">
+                  <div className="flex items-center gap-4">
+                    <Avatar
+                      key={`${profile.avatarUrl}-${avatarVersion}`}
+                      avatarUrl={profile.avatarUrl}
+                      name={profile.name}
+                      size="lg"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <AvatarUpload profile={profile} onChange={handleAvatarChange} />
+                    </div>
+                  </div>
+                </SettingsCard>
 
-        {profile ? (
-          <Card>
-            <Card.Header>
-              <Card.Title>Пароль</Card.Title>
-            </Card.Header>
-            <Card.Content>
-              <ChangePasswordForm />
-            </Card.Content>
-          </Card>
-        ) : null}
+                <SettingsCard icon={<LockKeyholeIcon width={14} height={14} />} title="Пароль">
+                  <ChangePasswordForm />
+                </SettingsCard>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

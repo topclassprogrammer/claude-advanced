@@ -2,20 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import {
-  Alert,
-  Button,
-  Card,
-  FieldError,
-  Form,
-  Input,
-  Label,
-  Spinner,
-  TextField,
-} from '@heroui/react';
+import { Alert, Button, FieldError, Form, Input, Label, Spinner, TextField } from '@heroui/react';
 import { ApiError, register } from '@/lib/auth-api';
 import { EMAIL_PATTERN } from '@/lib/email-pattern';
-import { AuthFormShell } from '@/components/auth/AuthFormShell';
+import { AuthScreenShell } from '@/components/auth/AuthScreenShell';
 import { PasswordField } from '@/components/auth/PasswordField';
 
 export default function RegisterPage() {
@@ -47,12 +37,19 @@ export default function RegisterPage() {
   };
 
   return (
-    <AuthFormShell
-      title="Создать аккаунт"
-      description="Укажите email и пароль, чтобы начать пользоваться сервисом"
+    <AuthScreenShell
+      promoHeadline="Встречи, которые не нужно конспектировать"
+      promoSub="Загрузите запись — сервис расшифрует разговор, соберёт краткое содержание и превратит договорённости в задачи."
     >
-      <Form onSubmit={onSubmit}>
-        <Card.Content className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <h2 className="text-heading-l text-foreground">Создать аккаунт</h2>
+        <p className="text-body text-muted">
+          Укажите email и пароль, чтобы начать пользоваться сервисом.
+        </p>
+      </div>
+
+      <Form onSubmit={onSubmit} className="flex flex-col gap-[26px]">
+        <div className="flex flex-col gap-4.5">
           {error ? (
             <Alert status="danger">
               <Alert.Indicator />
@@ -81,16 +78,10 @@ export default function RegisterPage() {
             isDisabled={isPending || success}
             name="email"
             type="email"
-            validate={(value) =>
-              EMAIL_PATTERN.test(value) ? null : 'Введите корректный email'
-            }
+            validate={(value) => (EMAIL_PATTERN.test(value) ? null : 'Введите корректный email')}
           >
             <Label>Email</Label>
-            <Input
-              autoComplete="email"
-              autoFocus
-              placeholder="you@example.com"
-            />
+            <Input autoComplete="email" autoFocus placeholder="you@example.com" />
             <FieldError />
           </TextField>
 
@@ -101,43 +92,31 @@ export default function RegisterPage() {
             minLength={6}
             description="Минимум 6 символов"
             validate={(value) =>
-              value.length >= 6
-                ? null
-                : 'Пароль должен содержать не менее 6 символов'
+              value.length >= 6 ? null : 'Пароль должен содержать не менее 6 символов'
             }
           />
-        </Card.Content>
+        </div>
 
-        <Card.Footer className="mt-2 flex flex-col gap-4">
-          <Button
-            className="w-full"
-            isDisabled={success}
-            isPending={isPending}
-            type="submit"
-          >
-            {({ isPending: pending }) => (
-              <>
-                {pending ? <Spinner color="current" size="sm" /> : null}
-                {pending
-                  ? 'Регистрация...'
-                  : success
-                    ? 'Зарегистрировано'
-                    : 'Зарегистрироваться'}
-              </>
-            )}
-          </Button>
-
-          <p className="text-center text-sm text-muted">
-            Уже есть аккаунт?{' '}
-            <Link
-              href="/auth/login"
-              className="font-medium text-accent hover:underline"
-            >
-              Войти
-            </Link>
-          </p>
-        </Card.Footer>
+        <Button className="w-full" isDisabled={success} isPending={isPending} type="submit">
+          {({ isPending: pending }) => (
+            <>
+              {pending ? <Spinner color="current" size="sm" /> : null}
+              {pending ? 'Регистрация...' : success ? 'Зарегистрировано' : 'Зарегистрироваться'}
+            </>
+          )}
+        </Button>
       </Form>
-    </AuthFormShell>
+
+      <p className="text-[11.5px] text-muted">
+        Регистрируясь, вы соглашаетесь с условиями использования и политикой обработки данных.
+      </p>
+
+      <p className="border-t border-border pt-5 text-body-s text-muted">
+        Уже есть аккаунт?{' '}
+        <Link href="/auth/login" className="text-label text-accent hover:underline">
+          Войти
+        </Link>
+      </p>
+    </AuthScreenShell>
   );
 }
